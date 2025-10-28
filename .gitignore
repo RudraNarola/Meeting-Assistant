@@ -1,0 +1,55 @@
+# Gitignore for a Java / Maven project
+# See: https://github.com/github/gitignore/blob/main/Java.gitignore
+
+# Maven build directory
+target/
+
+# Compiled class files
+*.class
+
+# Log files
+*.log
+
+# Package files
+*.jar
+*.war
+*.ear
+
+# Eclipse files
+.classpath
+.project
+.settings/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# NetBeans
+nbproject/private/
+
+# Maven specific
+dependency-reduced-pom.xml
+release.properties
+buildNumber.properties
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+tmp/
+out/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Other
+.factorypath
+
+# If you add a local environment file, ignore it
+.env
+
+*.md
