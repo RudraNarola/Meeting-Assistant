@@ -37,9 +37,10 @@ func main() {
 
 	// Service URLs
 	serviceURLs := proxy.ServiceURLs{
-		AudioService:        getEnv("AUDIO_SERVICE_URL", "http://localhost:8081"),
+		AudioService:         getEnv("AUDIO_SERVICE_URL", "http://localhost:8081"),
 		TranscriptionService: getEnv("TRANSCRIPTION_SERVICE_URL", "http://localhost:8082"),
-		DiarizationService:  getEnv("DIARIZATION_SERVICE_URL", "http://localhost:8083"),
+		DiarizationService:   getEnv("DIARIZATION_SERVICE_URL", "http://localhost:8083"),
+		SummaryService:       getEnv("SUMMARY_SERVICE_URL", "http://localhost:8085"),
 	}
 
 	// Initialize proxy and handlers
@@ -71,6 +72,7 @@ func main() {
 	r.Route("/api/v1", func(r chi.Router) {
 		// Audio upload and meeting management
 		r.Post("/meetings/upload", handler.UploadAudio)
+		r.Post("/audio/upload", handler.UploadAudio) // Alias for convenience
 		r.Get("/meetings/{meetingID}/audio", handler.GetAudioFiles)
 
 		// Transcription endpoints
@@ -84,6 +86,12 @@ func main() {
 
 		// Status endpoint
 		r.Get("/meetings/{meetingID}/status", handler.GetMeetingStatus)
+
+		// Summary endpoints
+		r.Get("/summaries", handler.GetAllSummaries)
+		r.Get("/summaries/{summaryID}", handler.GetSummaryByID)
+		r.Get("/meetings/{meetingID}/summary", handler.GetSummaryByMeetingID)
+		r.Delete("/summaries/{summaryID}", handler.DeleteSummary)
 	})
 
 	// Start server
@@ -92,6 +100,7 @@ func main() {
 	log.Printf("Audio Service: %s", serviceURLs.AudioService)
 	log.Printf("Transcription Service: %s", serviceURLs.TranscriptionService)
 	log.Printf("Diarization Service: %s", serviceURLs.DiarizationService)
+	log.Printf("Summary Service: %s", serviceURLs.SummaryService)
 
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatalf("Server failed to start: %v", err)

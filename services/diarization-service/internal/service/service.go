@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math/rand"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jaivik/transcript-generator/pkg/kafka"
 	"github.com/jaivik/transcript-generator/pkg/models"
 	"github.com/jaivik/transcript-generator/pkg/queue"
 	"github.com/jaivik/transcript-generator/services/diarization-service/internal/repository"
@@ -15,15 +17,17 @@ import (
 
 // DiarizationService handles speaker diarization business logic
 type DiarizationService struct {
-	repo *repository.DiarizationRepository
-	mq   *queue.MessageQueue
+	repo          *repository.DiarizationRepository
+	mq            *queue.MessageQueue
+	kafkaProducer *kafka.Producer
 }
 
 // NewDiarizationService creates a new diarization service
-func NewDiarizationService(repo *repository.DiarizationRepository, mq *queue.MessageQueue) *DiarizationService {
+func NewDiarizationService(repo *repository.DiarizationRepository, mq *queue.MessageQueue, kafkaProducer *kafka.Producer) *DiarizationService {
 	return &DiarizationService{
-		repo: repo,
-		mq:   mq,
+		repo:          repo,
+		mq:            mq,
+		kafkaProducer: kafkaProducer,
 	}
 }
 
@@ -69,6 +73,14 @@ func (s *DiarizationService) processDiarizationMessage(msg queue.Message) error 
 	// Update meeting status to completed
 	if err := s.repo.UpdateMeetingStatus(meetingID, "completed"); err != nil {
 		log.Printf("Failed to update meeting status: %v", err)
+	}
+
+	// Publish transcript to Kafka for summary generation
+	if s.kafkaProducer != nil {
+		if err := s.publishTranscriptToKafka(meetingID, transcriptionID); err != nil {
+			log.Printf("Failed to publish to Kafka: %v", err)
+			// Don't fail the entire process if Kafka publish fails
+		}
 	}
 
 	log.Printf("Diarization completed for transcription %s", transcriptionID)
@@ -271,4 +283,39 @@ func (s *DiarizationService) UpdateSpeaker(speakerID uuid.UUID, name string) (*m
 	}
 
 	return speaker, nil
+}
+
+// publishTranscriptToKafka publishes the completed transcript to Kafka
+func (s *DiarizationService) publishTranscriptToKafka(meetingID, transcriptionID uuid.UUID) error {
+	log.Printf("Publishing transcript to Kafka for meeting: %s", meetingID)
+
+	// Get the full transcript
+	transcript, err := s.GetFullTranscript(meetingID)
+	if err != nil {
+		return fmt.Errorf("failed to get full transcript: %w", err)
+	}
+
+	// Prepare message payload
+	payload := map[string]interface{}{
+		"meeting_id":       meetingID.String(),
+		"transcription_id": transcriptionID.String(),
+		"title":            transcript.Meeting.Title,
+		"platform":         transcript.Meeting.Platform,
+		"full_text":        transcript.FullText,
+		"duration":         transcript.Duration,
+		"speakers_count":   len(transcript.Speakers),
+		"segments_count":   len(transcript.Segments),
+		"created_at":       transcript.CreatedAt.Format(time.RFC3339),
+	}
+
+	// Publish to Kafka
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := s.kafkaProducer.Publish(ctx, meetingID.String(), payload); err != nil {
+		return fmt.Errorf("failed to publish to Kafka: %w", err)
+	}
+
+	log.Printf("Successfully published transcript to Kafka for meeting: %s", meetingID)
+	return nil
 }

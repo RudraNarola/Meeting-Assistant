@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/jaivik/transcript-generator/pkg/database"
+	"github.com/jaivik/transcript-generator/pkg/kafka"
 	"github.com/jaivik/transcript-generator/pkg/queue"
 	"github.com/jaivik/transcript-generator/services/diarization-service/internal/handlers"
 	"github.com/jaivik/transcript-generator/services/diarization-service/internal/repository"
@@ -46,9 +47,21 @@ func main() {
 	// Declare queue
 	mq.DeclareQueue("diarization_processing")
 
+	// Kafka producer connection (optional - for publishing transcripts)
+	var kafkaProducer *kafka.Producer
+	kafkaBrokers := getEnv("KAFKA_BROKERS", "")
+	if kafkaBrokers != "" {
+		brokerList := kafka.ParseBrokers(kafkaBrokers)
+		kafkaProducer = kafka.NewProducer(brokerList, "transcript-completed")
+		defer kafkaProducer.Close()
+		log.Println("Kafka producer initialized successfully")
+	} else {
+		log.Println("Kafka not configured, skipping Kafka producer initialization")
+	}
+
 	// Initialize repository and service
 	repo := repository.NewDiarizationRepository(db)
-	diarizationService := service.NewDiarizationService(repo, mq)
+	diarizationService := service.NewDiarizationService(repo, mq, kafkaProducer)
 
 	// Initialize handlers
 	handler := handlers.NewDiarizationHandler(diarizationService)

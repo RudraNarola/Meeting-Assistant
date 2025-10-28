@@ -169,7 +169,28 @@ func (s *AudioService) SaveVideoFile(meetingID uuid.UUID, filename string, file 
 	resolution, _ := utils.GetVideoResolution(videoPath)
 	videoDuration, _ := utils.GetAudioDuration(videoPath)
 
-	// Create video file record FIRST (before audio, since audio references video)
+	// Create audio file record FIRST (video will reference this)
+	audioFile := &models.AudioFile{
+		ID:         audioID,
+		MeetingID:  meetingID,
+		VideoID:    nil, // Will be set after video is created
+		Filename:   filename + ".wav", // Extracted audio filename
+		FilePath:   audioPath,
+		FileSize:   audioSize,
+		Duration:   duration,
+		Format:     "wav",
+		UploadedAt: time.Now(),
+		Processed:  false,
+	}
+
+	if err := s.repo.CreateAudioFile(audioFile); err != nil {
+		// Clean up files if database insert fails
+		os.Remove(videoPath)
+		os.Remove(audioPath)
+		return nil, nil, fmt.Errorf("failed to create audio record: %w", err)
+	}
+
+	// Create video file record SECOND (after audio exists)
 	videoFile := &models.VideoFile{
 		ID:          videoID,
 		MeetingID:   meetingID,
@@ -184,32 +205,11 @@ func (s *AudioService) SaveVideoFile(meetingID uuid.UUID, filename string, file 
 	}
 
 	if err := s.repo.CreateVideoFile(videoFile); err != nil {
-		// Clean up files if database insert fails
+		// Clean up files if video insert fails
 		os.Remove(videoPath)
 		os.Remove(audioPath)
+		// Note: Audio record remains in DB, could be cleaned up manually if needed
 		return nil, nil, fmt.Errorf("failed to create video record: %w", err)
-	}
-
-	// Create audio file record SECOND (after video exists)
-	audioFile := &models.AudioFile{
-		ID:         audioID,
-		MeetingID:  meetingID,
-		VideoID:    &videoID, // Link to video file
-		Filename:   filename + ".wav", // Extracted audio filename
-		FilePath:   audioPath,
-		FileSize:   audioSize,
-		Duration:   duration,
-		Format:     "wav",
-		UploadedAt: time.Now(),
-		Processed:  false,
-	}
-
-	if err := s.repo.CreateAudioFile(audioFile); err != nil {
-		// Clean up files if database insert fails
-		os.Remove(videoPath)
-		os.Remove(audioPath)
-		// Note: video_file record already exists, but CASCADE delete will handle it if meeting is deleted
-		return nil, nil, fmt.Errorf("failed to create audio record: %w", err)
 	}
 
 	// Update meeting status

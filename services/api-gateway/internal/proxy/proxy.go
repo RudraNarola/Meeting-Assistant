@@ -17,6 +17,7 @@ type ServiceURLs struct {
 	AudioService         string
 	TranscriptionService string
 	DiarizationService   string
+	SummaryService       string
 }
 
 // ServiceProxy handles proxying requests to microservices
@@ -47,6 +48,8 @@ func (sp *ServiceProxy) ProxyRequest(serviceName, path, method string, body io.R
 		serviceURL = sp.urls.TranscriptionService
 	case "diarization":
 		serviceURL = sp.urls.DiarizationService
+	case "summary":
+		serviceURL = sp.urls.SummaryService
 	default:
 		return nil, fmt.Errorf("unknown service: %s", serviceName)
 	}
@@ -81,6 +84,8 @@ func (sp *ServiceProxy) ProxyMultipartRequest(serviceName, path string, r *http.
 		serviceURL = sp.urls.TranscriptionService
 	case "diarization":
 		serviceURL = sp.urls.DiarizationService
+	case "summary":
+		serviceURL = sp.urls.SummaryService
 	default:
 		return nil, fmt.Errorf("unknown service: %s", serviceName)
 	}

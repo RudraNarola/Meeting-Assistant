@@ -214,3 +214,77 @@ func (h *GatewayHandler) copyResponse(w http.ResponseWriter, resp *http.Response
 	// Copy body
 	io.Copy(w, resp.Body)
 }
+
+// GetAllSummaries retrieves all summaries
+func (h *GatewayHandler) GetAllSummaries(w http.ResponseWriter, r *http.Request) {
+	path := "/summaries"
+
+	resp, err := h.proxy.ProxyRequest("summary", path, http.MethodGet, nil, nil)
+	if err != nil {
+		utils.RespondError(w, http.StatusBadGateway, fmt.Sprintf("Failed to get summaries: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	h.copyResponse(w, resp)
+}
+
+// GetSummaryByID retrieves a specific summary
+func (h *GatewayHandler) GetSummaryByID(w http.ResponseWriter, r *http.Request) {
+	summaryID := chi.URLParam(r, "summaryID")
+	path := fmt.Sprintf("/summaries/%s", summaryID)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cacheKey := fmt.Sprintf("summary:%s", summaryID)
+	data, err := h.proxy.GetWithCache(ctx, cacheKey, "summary", path, 15*time.Minute)
+	
+	if err != nil {
+		utils.RespondError(w, http.StatusBadGateway, fmt.Sprintf("Failed to get summary: %v", err))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+// GetSummaryByMeetingID retrieves a summary for a specific meeting
+func (h *GatewayHandler) GetSummaryByMeetingID(w http.ResponseWriter, r *http.Request) {
+	meetingID := chi.URLParam(r, "meetingID")
+	path := fmt.Sprintf("/meetings/%s/summary", meetingID)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cacheKey := fmt.Sprintf("summary:meeting:%s", meetingID)
+	data, err := h.proxy.GetWithCache(ctx, cacheKey, "summary", path, 15*time.Minute)
+	
+	if err != nil {
+		utils.RespondError(w, http.StatusBadGateway, fmt.Sprintf("Failed to get meeting summary: %v", err))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+// DeleteSummary deletes a specific summary
+func (h *GatewayHandler) DeleteSummary(w http.ResponseWriter, r *http.Request) {
+	summaryID := chi.URLParam(r, "summaryID")
+	path := fmt.Sprintf("/summaries/%s", summaryID)
+
+	resp, err := h.proxy.ProxyRequest("summary", path, http.MethodDelete, nil, nil)
+	if err != nil {
+		utils.RespondError(w, http.StatusBadGateway, fmt.Sprintf("Failed to delete summary: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	// Invalidate related caches
+	ctx := context.Background()
+	h.proxy.InvalidateCache(ctx, fmt.Sprintf("summary:%s", summaryID))
+	h.proxy.InvalidateCache(ctx, "summary:meeting:*")
+
+	h.copyResponse(w, resp)
+}
