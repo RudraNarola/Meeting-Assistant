@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS google_calendar_connections (
     access_token TEXT,
     refresh_token TEXT,
     token_expiry TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );

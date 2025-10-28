@@ -61,6 +61,37 @@ public class GoogleCalendarConfig {
         return new GoogleCalendarClientFactory(transport, jsonFactory, applicationName, oauthService);
     }
 
+    /**
+     * Create a Calendar service instance for a user with their tokens
+     * 
+     * @param accessToken  The user's access token
+     * @param refreshToken The user's refresh token
+     * @return Configured Calendar service
+     */
+    public Calendar createCalendarService(String accessToken, String refreshToken) {
+        try {
+            GoogleCalendarClientFactory factory = googleCalendarClientFactory(
+                    googleNetHttpTransport(),
+                    jacksonFactory(),
+                    null // We'll handle credentials directly
+            );
+
+            // Build credential directly
+            com.google.api.client.auth.oauth2.Credential credential = new com.google.api.client.auth.oauth2.Credential.Builder(
+                    com.google.api.client.auth.oauth2.BearerToken.authorizationHeaderAccessMethod())
+                    .build();
+            credential.setAccessToken(accessToken);
+            credential.setRefreshToken(refreshToken);
+
+            logger.debug("Creating Calendar service for applicationName={}", applicationName);
+            return new Calendar.Builder(googleNetHttpTransport(), jacksonFactory(), credential)
+                    .setApplicationName(applicationName)
+                    .build();
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to create Google Calendar service", e);
+        }
+    }
+
     public static class GoogleCalendarClientFactory {
         private final NetHttpTransport transport;
         private final JsonFactory jsonFactory;

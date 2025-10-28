@@ -4,6 +4,7 @@
 # Maven build directory
 target/
 
+*.ps1
 # Compiled class files
 *.class
 

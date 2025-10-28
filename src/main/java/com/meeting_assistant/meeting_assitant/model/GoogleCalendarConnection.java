@@ -44,6 +44,10 @@ public class GoogleCalendarConnection {
     @Column(name = "token_expiry")
     private OffsetDateTime tokenExpiry;
 
+    @Column(name = "is_active", nullable = false)
+    @Builder.Default
+    private Boolean isActive = true;
+
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 

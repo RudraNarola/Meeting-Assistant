@@ -38,4 +38,13 @@ public final class DateTimeUtil {
         return OffsetDateTime.ofInstant(Instant.ofEpochMilli(epochMilli), ZoneId.of("UTC"));
     }
 
+    /**
+     * Converts OffsetDateTime to UTC ISO string format for Google Calendar API
+     */
+    public static String toUtcString(OffsetDateTime dt) {
+        if (dt == null)
+            return null;
+        return formatIso(toUtc(dt));
+    }
+
 }
