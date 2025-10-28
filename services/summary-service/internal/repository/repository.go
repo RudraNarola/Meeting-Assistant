@@ -113,6 +113,20 @@ func (r *SummaryRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// DeleteByMeetingID removes a summary by meeting ID
+func (r *SummaryRepository) DeleteByMeetingID(ctx context.Context, meetingID string) error {
+	result, err := r.collection.DeleteOne(ctx, bson.M{"meeting_id": meetingID})
+	if err != nil {
+		return fmt.Errorf("failed to delete summary: %w", err)
+	}
+
+	if result.DeletedCount == 0 {
+		return fmt.Errorf("summary not found for meeting")
+	}
+
+	return nil
+}
+
 // Update updates a summary
 func (r *SummaryRepository) Update(ctx context.Context, summary *Summary) error {
 	summary.UpdatedAt = time.Now()

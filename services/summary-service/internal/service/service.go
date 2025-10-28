@@ -262,3 +262,9 @@ func (s *SummaryService) DeleteSummary(id string) error {
 	ctx := context.Background()
 	return s.repo.Delete(ctx, id)
 }
+
+// DeleteSummaryByMeetingID deletes a summary by meeting ID
+func (s *SummaryService) DeleteSummaryByMeetingID(meetingID string) error {
+	ctx := context.Background()
+	return s.repo.DeleteByMeetingID(ctx, meetingID)
+}

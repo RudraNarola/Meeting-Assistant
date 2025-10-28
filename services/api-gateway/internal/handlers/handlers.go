@@ -288,3 +288,22 @@ func (h *GatewayHandler) DeleteSummary(w http.ResponseWriter, r *http.Request) {
 
 	h.copyResponse(w, resp)
 }
+
+// DeleteSummaryByMeetingID deletes a summary by meeting ID
+func (h *GatewayHandler) DeleteSummaryByMeetingID(w http.ResponseWriter, r *http.Request) {
+	meetingID := chi.URLParam(r, "meetingID")
+	path := fmt.Sprintf("/meetings/%s/summary", meetingID)
+
+	resp, err := h.proxy.ProxyRequest("summary", path, http.MethodDelete, nil, nil)
+	if err != nil {
+		utils.RespondError(w, http.StatusBadGateway, fmt.Sprintf("Failed to delete summary: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	// Invalidate related caches
+	ctx := context.Background()
+	h.proxy.InvalidateCache(ctx, fmt.Sprintf("summary:meeting:%s", meetingID))
+
+	h.copyResponse(w, resp)
+}

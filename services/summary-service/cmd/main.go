@@ -89,6 +89,7 @@ func main() {
 	r.Get("/summaries/{summaryID}", handler.GetSummaryByID)
 	r.Get("/meetings/{meetingID}/summary", handler.GetSummaryByMeetingID)
 	r.Delete("/summaries/{summaryID}", handler.DeleteSummary)
+	r.Delete("/meetings/{meetingID}/summary", handler.DeleteSummaryByMeetingID)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Summary Service is healthy"))
 	})

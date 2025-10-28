@@ -69,3 +69,15 @@ func (h *SummaryHandler) DeleteSummary(w http.ResponseWriter, r *http.Request) {
 
 	utils.RespondSuccess(w, "Summary deleted successfully", nil)
 }
+
+// DeleteSummaryByMeetingID deletes a summary by meeting ID
+func (h *SummaryHandler) DeleteSummaryByMeetingID(w http.ResponseWriter, r *http.Request) {
+	meetingID := chi.URLParam(r, "meetingID")
+	
+	if err := h.service.DeleteSummaryByMeetingID(meetingID); err != nil {
+		utils.RespondError(w, http.StatusNotFound, "Summary not found for this meeting")
+		return
+	}
+
+	utils.RespondSuccess(w, "Summary deleted successfully", nil)
+}

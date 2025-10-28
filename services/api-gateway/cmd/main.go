@@ -92,6 +92,7 @@ func main() {
 		r.Get("/summaries/{summaryID}", handler.GetSummaryByID)
 		r.Get("/meetings/{meetingID}/summary", handler.GetSummaryByMeetingID)
 		r.Delete("/summaries/{summaryID}", handler.DeleteSummary)
+		r.Delete("/meetings/{meetingID}/summary", handler.DeleteSummaryByMeetingID)
 	})
 
 	// Start server
