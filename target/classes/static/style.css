@@ -1,0 +1,112 @@
+:root {
+    --bg: #0f1720;
+    --card: #111827;
+    --accent: #7c3aed;
+    --text: #e6eef8
+}
+
+body {
+    font-family: Inter, Segoe UI, Arial;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0
+}
+
+.container {
+    max-width: 900px;
+    margin: 40px auto;
+    padding: 20px
+}
+
+h1 {
+    margin: 0 0 20px
+}
+
+.card {
+    background: var(--card);
+    padding: 16px;
+    border-radius: 8px;
+    margin: 12px 0
+}
+
+input,
+select {
+    width: 100%;
+    padding: 8px;
+    margin: 6px 0;
+    border-radius: 6px;
+    border: 1px solid #223
+}
+
+button {
+    padding: 8px 12px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer
+}
+
+.result {
+    margin-top: 8px;
+    color: #cfe
+}
+
+pre {
+    background: #081226;
+    padding: 12px;
+    border-radius: 6px
+}
+
+/* Navigation styles */
+header.main-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 900px;
+    margin: 24px auto 0;
+    padding: 8px 20px;
+    color: var(--text);
+}
+
+.main-nav {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.main-nav .brand {
+    font-weight: 600;
+    color: var(--text);
+    text-decoration: none;
+    margin-right: 12px;
+}
+
+.nav-right a,
+.nav-left a {
+    color: var(--text);
+    margin-right: 12px;
+    text-decoration: none;
+}
+
+.nav-right a:hover,
+.nav-left a:hover {
+    text-decoration: underline;
+}
+
+.nav-username {
+    font-weight: 600;
+    margin-right: 12px;
+    color: var(--text);
+}
+
+@media(min-width:700px) {
+    #forms {
+        display: flex;
+        gap: 12px;
+    }
+
+    #forms .card {
+        flex: 1;
+    }
+}

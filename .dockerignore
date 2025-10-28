@@ -1,0 +1,46 @@
+# Maven build output
+target/
+
+# Maven wrapper / local maven files
+.mvn/
+mvnw
+mvnw.cmd
+
+# Git
+.git/
+
+# IDEs and editors
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Logs and temp files
+*.log
+logs/
+tmp/
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (if present)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Environment files (secrets)
+.env
+.env.*
+
+# Packaged archives / build artifacts
+*.jar
+*.war
+*.ear
+
+# Coverage / reports
+coverage/
+*.lcov

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Register — Meeting Assistant</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header id="nav"></header>
+  <main class="container">
+    <h1>Register</h1>
+    <section class="card">
+      <input id="reg-username" placeholder="username">
+      <input id="reg-password" type="password" placeholder="password">
+      <select id="reg-role">
+        <option value="ROLE_USER">User</option>
+        <option value="ROLE_ADMIN">Admin</option>
+      </select>
+      <button id="btn-register">Register</button>
+      <div class="result" id="reg-result"></div>
+      <p><a href="/login.html">Already have an account? Login</a></p>
+    </section>
+  </main>
+  <script src="/nav.js"></script>
+  <script src="/register.js"></script>
+</body>
+</html>
