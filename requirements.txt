@@ -1,0 +1,6 @@
+kafka-python
+python-dotenv
+groq
+pymongo
+fastapi
+uvicorn

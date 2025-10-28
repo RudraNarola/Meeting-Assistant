@@ -1,0 +1,44 @@
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: summary-mongodb
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: meeting_summaries
+    ports:
+      - "27017:27017"
+    networks:
+      - summary-network
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: summary-api
+    restart: always
+    environment:
+      - MONGO_URI=mongodb://admin:admin123@mongodb:27017/
+      - MONGO_DB=meeting_summaries
+    ports:
+      - "8000:8000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - summary-network
+
+networks:
+  summary-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:

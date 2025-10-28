@@ -1,0 +1,115 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    restart: always
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - kafka-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    restart: always
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    depends_on:
+      - zookeeper
+    networks:
+      - kafka-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Producer - Commented out to prevent auto-start
+  # Use producer_once.py manually for testing
+  # Uncomment if you want continuous transcript generation
+  
+  # producer:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.producer
+  #   container_name: kafka-producer
+  #   restart: on-failure
+  #   environment:
+  #     - KAFKA_BROKER=kafka:9092
+  #     - KAFKA_TOPIC=transcripts
+  #   depends_on:
+  #     kafka:
+  #       condition: service_healthy
+  #   networks:
+  #     - kafka-network
+
+  mongodb:
+    image: mongo:7.0
+    container_name: mongodb
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: meeting_summaries
+    ports:
+      - "27017:27017"
+    networks:
+      - kafka-network
+    volumes:
+      - mongodb_data:/data/db
+
+  consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile.consumer
+    container_name: kafka-consumer
+    restart: always
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - KAFKA_TOPIC=transcripts
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - MONGO_URI=mongodb://admin:admin123@mongodb:27017/
+      - MONGO_DB=meeting_summaries
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+    networks:
+      - kafka-network
+    volumes:
+      - ./data:/app/data
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: summary-api
+    restart: always
+    environment:
+      - MONGO_URI=mongodb://admin:admin123@mongodb:27017/
+      - MONGO_DB=meeting_summaries
+    ports:
+      - "8000:8000"
+    depends_on:
+      mongodb:
+        condition: service_started
+    networks:
+      - kafka-network
+
+networks:
+  kafka-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
