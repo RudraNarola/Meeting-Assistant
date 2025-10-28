@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS meetings (
 CREATE TABLE IF NOT EXISTS audio_files (
     id UUID PRIMARY KEY,
     meeting_id UUID REFERENCES meetings(id) ON DELETE CASCADE,
+    video_id UUID, -- References video_files(id), nullable for direct audio uploads
     filename VARCHAR(255) NOT NULL,
     file_path VARCHAR(500) NOT NULL,
     file_size BIGINT,
@@ -21,6 +22,20 @@ CREATE TABLE IF NOT EXISTS audio_files (
     format VARCHAR(50),
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     processed BOOLEAN DEFAULT FALSE
+);
+
+-- Video files table
+CREATE TABLE IF NOT EXISTS video_files (
+    id UUID PRIMARY KEY,
+    meeting_id UUID REFERENCES meetings(id) ON DELETE CASCADE,
+    filename VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    file_size BIGINT,
+    duration FLOAT,
+    format VARCHAR(50),
+    resolution VARCHAR(50),
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    audio_file_id UUID REFERENCES audio_files(id) ON DELETE SET NULL
 );
 
 -- Transcriptions table
@@ -60,6 +75,8 @@ CREATE TABLE IF NOT EXISTS transcript_segments (
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_meetings_status ON meetings(status);
 CREATE INDEX IF NOT EXISTS idx_audio_files_meeting ON audio_files(meeting_id);
+CREATE INDEX IF NOT EXISTS idx_audio_files_video ON audio_files(video_id);
+CREATE INDEX IF NOT EXISTS idx_video_files_meeting ON video_files(meeting_id);
 CREATE INDEX IF NOT EXISTS idx_transcriptions_meeting ON transcriptions(meeting_id);
 CREATE INDEX IF NOT EXISTS idx_speakers_meeting ON speakers(meeting_id);
 CREATE INDEX IF NOT EXISTS idx_segments_transcription ON transcript_segments(transcription_id);

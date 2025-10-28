@@ -69,6 +69,7 @@ func main() {
 	// Routes
 	r.Post("/upload", handler.UploadAudio)
 	r.Get("/meetings/{meetingID}/audio", handler.GetAudioFiles)
+	r.Get("/meetings/{meetingID}/videos", handler.GetVideoFiles)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Audio Service is healthy"))
 	})

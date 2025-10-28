@@ -18,15 +18,30 @@ type Meeting struct {
 
 // AudioFile represents an uploaded audio file
 type AudioFile struct {
-	ID         uuid.UUID `json:"id"`
-	MeetingID  uuid.UUID `json:"meeting_id"`
-	Filename   string    `json:"filename"`
-	FilePath   string    `json:"file_path"`
-	FileSize   int64     `json:"file_size"`
-	Duration   float64   `json:"duration"`
-	Format     string    `json:"format"`
-	UploadedAt time.Time `json:"uploaded_at"`
-	Processed  bool      `json:"processed"`
+	ID         uuid.UUID  `json:"id"`
+	MeetingID  uuid.UUID  `json:"meeting_id"`
+	VideoID    *uuid.UUID `json:"video_id,omitempty"` // Reference to video file if audio was extracted
+	Filename   string     `json:"filename"`
+	FilePath   string     `json:"file_path"`
+	FileSize   int64      `json:"file_size"`
+	Duration   float64    `json:"duration"`
+	Format     string     `json:"format"`
+	UploadedAt time.Time  `json:"uploaded_at"`
+	Processed  bool       `json:"processed"`
+}
+
+// VideoFile represents an uploaded video file
+type VideoFile struct {
+	ID          uuid.UUID `json:"id"`
+	MeetingID   uuid.UUID `json:"meeting_id"`
+	Filename    string    `json:"filename"`
+	FilePath    string    `json:"file_path"`
+	FileSize    int64     `json:"file_size"`
+	Duration    float64   `json:"duration"`
+	Format      string    `json:"format"`
+	Resolution  string    `json:"resolution,omitempty"`
+	UploadedAt  time.Time `json:"uploaded_at"`
+	AudioFileID uuid.UUID `json:"audio_file_id"` // ID of extracted audio
 }
 
 // Transcription represents the full transcription

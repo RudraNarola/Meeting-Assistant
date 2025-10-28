@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jaivik/transcript-generator/pkg/utils"
 	"github.com/jaivik/transcript-generator/services/audio-service/internal/service"
+	fileutils "github.com/jaivik/transcript-generator/services/audio-service/internal/utils"
 )
 
 // AudioHandler handles HTTP requests for audio service
@@ -58,16 +59,44 @@ func (h *AudioHandler) UploadAudio(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get the file from form
+	// Try to get the file from form - support both "audio" and "file" field names
 	file, header, err := r.FormFile("audio")
 	if err != nil {
-		utils.RespondError(w, http.StatusBadRequest, "Audio file is required")
-		return
+		file, header, err = r.FormFile("file")
+		if err != nil {
+			utils.RespondError(w, http.StatusBadRequest, "Audio or video file is required")
+			return
+		}
 	}
 	defer file.Close()
 
-	// Save audio file
-	audioFile, err := h.service.SaveAudioFile(meetingID, header.Filename, file)
+	filename := header.Filename
+
+	// Check if it's a video file
+	if fileutils.IsVideoFile(filename) {
+		// Handle video upload with audio extraction
+		videoFile, audioFile, err := h.service.SaveVideoFile(meetingID, filename, file)
+		if err != nil {
+			utils.RespondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		utils.RespondSuccess(w, "Video uploaded and audio extracted successfully", map[string]interface{}{
+			"meeting_id": meetingID,
+			"video_file": videoFile,
+			"audio_file": audioFile,
+			"message":    "Audio has been extracted from video and queued for transcription",
+		})
+		return
+	}
+
+	// Handle audio file upload
+	if !fileutils.IsAudioFile(filename) {
+		utils.RespondError(w, http.StatusBadRequest, "File must be an audio or video file")
+		return
+	}
+
+	audioFile, err := h.service.SaveAudioFile(meetingID, filename, file)
 	if err != nil {
 		utils.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -105,5 +134,34 @@ func (h *AudioHandler) GetAudioFiles(w http.ResponseWriter, r *http.Request) {
 	utils.RespondJSON(w, http.StatusOK, map[string]interface{}{
 		"meeting":     meeting,
 		"audio_files": audioFiles,
+	})
+}
+
+// GetVideoFiles retrieves all video files for a meeting
+func (h *AudioHandler) GetVideoFiles(w http.ResponseWriter, r *http.Request) {
+	meetingIDStr := chi.URLParam(r, "meetingID")
+	meetingID, err := uuid.Parse(meetingIDStr)
+	if err != nil {
+		utils.RespondError(w, http.StatusBadRequest, "Invalid meeting ID")
+		return
+	}
+
+	// Get meeting
+	meeting, err := h.service.GetMeeting(meetingID)
+	if err != nil {
+		utils.RespondError(w, http.StatusNotFound, "Meeting not found")
+		return
+	}
+
+	// Get video files
+	videoFiles, err := h.service.GetVideoFiles(meetingID)
+	if err != nil {
+		utils.RespondError(w, http.StatusInternalServerError, "Failed to retrieve video files")
+		return
+	}
+
+	utils.RespondJSON(w, http.StatusOK, map[string]interface{}{
+		"meeting":     meeting,
+		"video_files": videoFiles,
 	})
 }

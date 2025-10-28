@@ -4,7 +4,8 @@ A complete microservices-based application built in Go for generating meeting tr
 
 ## 🌟 Features
 
-- **Audio Upload & Processing**: Upload meeting recordings from Google Meet or Zoom
+- **Audio & Video Upload**: Upload meeting recordings from Google Meet or Zoom (supports both audio and video files)
+- **🎥 Automatic Audio Extraction**: Videos are automatically processed to extract audio for transcription
 - **🎙️ Real AI Transcription**: Uses OpenAI's Whisper for accurate speech-to-text (no API keys needed!)
 - **Speaker Diarization**: Identify and tag different speakers in the conversation
 - **90+ Languages Supported**: Automatic language detection and transcription
@@ -29,10 +30,12 @@ The application consists of 5 main microservices:
 
 ### 2. Audio Service (Port 8081)
 
-- Handles audio file uploads
-- Stores audio files in persistent storage
+- Handles audio and video file uploads
+- Automatically extracts audio from video files using FFmpeg
+- Stores audio/video files in persistent storage
 - Manages meeting metadata
 - Publishes messages to transcription queue
+- Supports multiple audio and video formats
 
 ### 3. Transcription Service (Port 8082)
 
@@ -128,18 +131,56 @@ http://localhost:8080/api/v1
 ```bash
 POST /api/v1/meetings/upload
 
-# Example using curl
+# Example using curl - Audio file
 curl -X POST http://localhost:8080/api/v1/meetings/upload \
   -F "audio=@/path/to/meeting.mp3" \
   -F "title=Team Standup Meeting" \
   -F "platform=google_meet"
+
+# Example using curl - Video file (audio will be extracted automatically)
+curl -X POST http://localhost:8080/api/v1/meetings/upload \
+  -F "file=@/path/to/meeting.mp4" \
+  -F "title=Team Standup Meeting" \
+  -F "platform=zoom"
 ```
 
 **Request:**
 
-- `audio` (file): Audio file (mp3, wav, m4a, etc.)
+- `audio` or `file` (file): Audio file (mp3, wav, m4a, etc.) or Video file (mp4, avi, mov, etc.)
 - `title` (string): Meeting title
 - `platform` (string): "google_meet" or "zoom"
+
+**Supported Formats:**
+
+- Audio: MP3, WAV, M4A, AAC, OGG, FLAC, WMA, Opus, WebM
+- Video: MP4, AVI, MOV, MKV, WebM, FLV, WMV, M4V, MPEG
+
+**Response for Video Upload:**
+
+```json
+{
+  "message": "Video uploaded and audio extracted successfully",
+  "data": {
+    "meeting_id": "uuid",
+    "video_file": {
+      "id": "uuid",
+      "filename": "meeting.mp4",
+      "file_size": 10485760,
+      "duration": 180.5,
+      "resolution": "1920x1080",
+      "uploaded_at": "2025-10-28T10:00:00Z"
+    },
+    "audio_file": {
+      "id": "uuid",
+      "filename": "meeting.mp4.wav",
+      "file_size": 5242880,
+      "duration": 180.5,
+      "uploaded_at": "2025-10-28T10:00:00Z"
+    },
+    "message": "Audio has been extracted from video and queued for transcription"
+  }
+}
+```
 
 **Response:**
 
