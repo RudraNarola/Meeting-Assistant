@@ -1,42 +1,64 @@
 import json
 from typing import Any, List
+from datetime import datetime
 from pydantic.json import pydantic_encoder
-from app.store.redis_client import get_redis_client
+from app.store.mongodb_client import get_collection
+import logging
 
-# Initialize Redis client safely
-try:
-    r = get_redis_client()
-except Exception:
-    r = None
-
+logger = logging.getLogger("repo")
 
 def save_tasks(meeting_id: str, data: List[Any]) -> None:
     """
-    Persist tasks to Redis as JSON.
-    Safe no-op if Redis is unavailable.
+    Persist tasks to MongoDB.
+    Safe no-op if MongoDB is unavailable.
     """
-    if not r:
+    collection = get_collection("action_items")
+    if collection is None:
+        logger.warning("MongoDB not available, skipping save")
         return
-    key = f"tasks:{meeting_id}"
+    
     try:
-        r.set(key, json.dumps(data, default=pydantic_encoder))
+        # Convert data to dict format
+        tasks_data = json.loads(json.dumps(data, default=pydantic_encoder))
+        
+        # Prepare document
+        document = {
+            "meeting_id": meeting_id,
+            "tasks": tasks_data,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        
+        # Upsert: update if exists, insert if not
+        collection.update_one(
+            {"meeting_id": meeting_id},
+            {"$set": document},
+            upsert=True
+        )
+        logger.info(f"✓ Saved {len(data)} tasks for meeting {meeting_id}")
     except Exception as e:
-        print(f"[Redis] Save failed for {key}: {e}")
+        logger.error(f"✗ MongoDB save failed for {meeting_id}: {e}")
 
 
 def get_tasks(meeting_id: str):
     """
-    Retrieve tasks for a meeting from Redis.
+    Retrieve tasks for a meeting from MongoDB.
     Returns [] if not found or on error.
     """
-    if not r:
+    collection = get_collection("action_items")
+    if collection is None:
+        logger.warning("MongoDB not available, returning empty list")
         return []
-    key = f"tasks:{meeting_id}"
+    
     try:
-        data = r.get(key)
-        if not data:
+        document = collection.find_one({"meeting_id": meeting_id})
+        if not document:
+            logger.info(f"No tasks found for meeting {meeting_id}")
             return []
-        return json.loads(data)
+        
+        tasks = document.get("tasks", [])
+        logger.info(f"✓ Retrieved {len(tasks)} tasks for meeting {meeting_id}")
+        return tasks
     except Exception as e:
-        print(f"[Redis] Load failed for {key}: {e}")
+        logger.error(f"✗ MongoDB load failed for {meeting_id}: {e}")
         return []

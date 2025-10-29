@@ -38,7 +38,7 @@ class Participant(BaseModel):
 
 class MeetingSummaryIn(BaseModel):
     meeting_id: str
-    summary: str
+    transcription: str
     timestamp_utc: datetime
 
 

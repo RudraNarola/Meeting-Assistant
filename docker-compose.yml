@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  action-item-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: action-item-service
+    ports:
+      - "8000:8000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL}
+      - ACTION_MIN_SCORE=${ACTION_MIN_SCORE}
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGODB_DB_NAME=${MONGODB_DB_NAME}
+    volumes:
+      - ./app:/app/app # Mount for hot reload during development
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import requests; requests.get('http://localhost:8000/healthz')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - action-item-network
+
+networks:
+  action-item-network:
+    driver: bridge
