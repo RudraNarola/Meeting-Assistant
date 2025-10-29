@@ -218,6 +218,48 @@ public class GoogleCalendarService {
     }
 
     /**
+     * List events updated since a given timestamp (uses
+     * Events.list().setUpdatedMin())
+     */
+    public List<Event> listEventsUpdatedSince(User user, OffsetDateTime updatedSince, int maxResults) {
+        logger.info("Listing Google Calendar events updated since {} for user: {}", updatedSince, user.getId());
+
+        try {
+            Calendar calendarService = getCalendarService(user);
+
+            DateTime updated = new DateTime(DateTimeUtil.toUtcString(updatedSince));
+
+            List<Event> results = new java.util.ArrayList<>();
+            String pageToken = null;
+
+            do {
+                Events events = calendarService.events()
+                        .list("primary")
+                        .setUpdatedMin(updated)
+                        .setSingleEvents(true)
+                        .setMaxResults(Integer.valueOf(Math.min(maxResults, 250)))
+                        .setPageToken(pageToken)
+                        .execute();
+
+                if (events.getItems() != null)
+                    results.addAll(events.getItems());
+
+                pageToken = events.getNextPageToken();
+                // avoid accumulating too many results in one run
+                if (results.size() >= maxResults)
+                    break;
+            } while (pageToken != null);
+
+            logSyncOperation(user, "INBOUND_LIST", "SUCCESS", "Retrieved " + results.size() + " events");
+            return results;
+        } catch (IOException e) {
+            logger.error("Failed to list updated events for user: {}", user.getId(), e);
+            logSyncOperation(user, "INBOUND_LIST", "FAILED", "Error listing updated events: " + e.getMessage());
+            throw new GoogleCalendarServiceException("Failed to list updated events", e);
+        }
+    }
+
+    /**
      * Maps a Task entity to a Google Calendar Event
      * 
      * @param task The task to map
