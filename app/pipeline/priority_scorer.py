@@ -16,9 +16,11 @@ class PriorityScorer:
     """
     Simple priority assignment based on deadline proximity.
     
-    Priority Rules:
-    - HIGH: Due today, tomorrow, or within 2 days
-    - NORMAL: Due within 3-7 days
+    Priority Rules (5 levels):
+    - CRITICAL: Overdue tasks (past deadline)
+    - HIGH: Due today or tomorrow (0-1 days)
+    - MEDIUM: Due within 2-3 days
+    - NORMAL: Due within 4-7 days
     - LOW: Due after 7 days or no deadline
     """
     
@@ -39,7 +41,7 @@ class PriorityScorer:
             full_text: Full sentence from meeting (not used in simple mode)
         
         Returns:
-            PriorityEnum: high, normal, or low
+            PriorityEnum: critical, high, medium, normal, or low
         """
         if not due_date:
             logger.info(f"No deadline - assigning LOW priority to: {title[:50]}")
@@ -52,17 +54,21 @@ class PriorityScorer:
         # Calculate days until due
         days_until_due = (due_date - ref_date).days
         
-        # Assign priority based on days remaining
+        # Assign priority based on days remaining (5 levels)
         if days_until_due < 0:
-            # Overdue - high priority
-            logger.info(f"OVERDUE ({abs(days_until_due)} days) - HIGH priority: {title[:50]}")
-            return PriorityEnum.high
-        elif days_until_due <= 2:
-            # Due today, tomorrow, or day after - high priority
+            # Overdue - critical priority
+            logger.info(f"OVERDUE ({abs(days_until_due)} days) - CRITICAL priority: {title[:50]}")
+            return PriorityEnum.critical
+        elif days_until_due <= 1:
+            # Due today or tomorrow - high priority
             logger.info(f"Due in {days_until_due} day(s) - HIGH priority: {title[:50]}")
             return PriorityEnum.high
+        elif days_until_due <= 3:
+            # Due within 2-3 days - medium priority
+            logger.info(f"Due in {days_until_due} days - MEDIUM priority: {title[:50]}")
+            return PriorityEnum.medium
         elif days_until_due <= 7:
-            # Due within a week - normal priority
+            # Due within 4-7 days - normal priority
             logger.info(f"Due in {days_until_due} days - NORMAL priority: {title[:50]}")
             return PriorityEnum.normal
         else:

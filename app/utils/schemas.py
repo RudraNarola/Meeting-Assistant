@@ -16,7 +16,9 @@ class SourceEnum(str, Enum):
 
 
 class PriorityEnum(str, Enum):
+    critical = "critical"
     high = "high"
+    medium = "medium"
     normal = "normal"
     low = "low"
 
