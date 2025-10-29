@@ -4,6 +4,7 @@ from app.utils.schemas import ActionItem, Participant
 from datetime import datetime, timedelta, date
 from typing import List, Optional, Tuple
 from app.pipeline.preprocess import split_sentences
+from app.pipeline.priority_scorer import assign_priority
 import logging, dateparser, re, os, requests, calendar
 from dotenv import load_dotenv
 
@@ -507,16 +508,25 @@ def extract_action_items(summary: str, participants: List[Participant], meeting_
         if len(title.split()) > 10:
             title = " ".join(title.split()[:7])
         
+        # Intelligently assign priority based on multiple factors
+        priority = assign_priority(
+            title=title,
+            due_date=due,
+            meeting_time=ref_dt,
+            full_text=sent
+        )
+        
         logger.info(f"Extracted - Title: {title}")
         logger.info(f"Extracted - Owner: {owner.name if owner else 'None'}")
         logger.info(f"Extracted - Due: {due}")
+        logger.info(f"Extracted - Priority: {priority}")
 
         item = ActionItem(
             id=f"hf-{int(ref_dt.timestamp())}-{idx}",
             title=title,
             owner=owner,
             due=due,
-            priority="normal",
+            priority=priority,
             source="huggingface",
             confidence=0.9,
             status="open",
