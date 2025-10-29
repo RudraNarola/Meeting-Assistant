@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import MeetingRecordings from "@/components/MeetingRecordings";
 
 interface Meeting {
   id: string;
@@ -271,6 +272,9 @@ export default function MeetingDetails({
                 )}
               </div>
             )}
+
+            {/* Meeting Recordings */}
+            <MeetingRecordings meetingId={meeting.id} />
 
             {/* Recording */}
             {meeting.recordingUrl && (

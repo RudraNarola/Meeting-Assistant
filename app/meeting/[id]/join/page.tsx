@@ -1,10 +1,19 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Room, DisconnectReason } from "livekit-client";
+import {
+  Room,
+  DisconnectReason,
+  RemoteTrack,
+  RemoteTrackPublication,
+  Track,
+  Participant,
+  RoomEvent,
+  TrackPublication,
+} from "livekit-client";
 import {
   LiveKitRoom,
   VideoConference,
@@ -13,6 +22,7 @@ import {
   RoomAudioRenderer,
   ControlBar,
   useTracks,
+  useRoomContext,
 } from "@livekit/components-react";
 import "@livekit/components-styles";
 
@@ -32,6 +42,289 @@ interface JoinMeetingPageProps {
   params: Promise<{ id: string }>;
 }
 
+// Room Manager Component to handle recording logic
+interface RoomManagerProps {
+  meetingId: string;
+  onRecordingStatusChange: (
+    status: "idle" | "starting" | "recording" | "stopping"
+  ) => void;
+  onRecordingStateChange: (isRecording: boolean) => void;
+}
+
+function RoomManager({
+  meetingId,
+  onRecordingStatusChange,
+  onRecordingStateChange,
+}: RoomManagerProps) {
+  const room = useRoomContext();
+  const [participantAudioStreams, setParticipantAudioStreams] = useState<
+    Map<string, MediaStream>
+  >(new Map());
+  const [mediaRecorders, setMediaRecorders] = useState<
+    Map<string, MediaRecorder>
+  >(new Map());
+  const [isRecording, setIsRecording] = useState(false);
+
+  // Helper functions
+  const uploadAudioToFirebase = async (
+    participantId: string,
+    audioBlob: Blob
+  ) => {
+    try {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const filename = `meeting-${meetingId}/participant-${participantId}/audio-${timestamp}.webm`;
+
+      const formData = new FormData();
+      formData.append("audio", audioBlob, filename);
+      formData.append("meetingId", meetingId);
+      formData.append("participantId", participantId);
+      formData.append("timestamp", timestamp);
+
+      const response = await fetch("/api/recordings/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+      } else {
+        console.error(
+          "Failed to upload audio:",
+          response.status,
+          response.statusText
+        );
+      }
+    } catch (error) {
+      console.error("Error uploading audio:", error);
+    }
+  };
+
+  const startRecordingForParticipant = (
+    participantId: string,
+    audioStream: MediaStream
+  ) => {
+    try {
+      const options: MediaRecorderOptions = {
+        mimeType: "audio/webm;codecs=opus",
+        audioBitsPerSecond: 128000,
+      };
+
+      if (!MediaRecorder.isTypeSupported(options.mimeType!)) {
+        if (MediaRecorder.isTypeSupported("audio/mp4")) {
+          options.mimeType = "audio/mp4";
+        } else if (MediaRecorder.isTypeSupported("audio/wav")) {
+          options.mimeType = "audio/wav";
+        } else {
+          delete options.mimeType;
+        }
+      }
+
+      const mediaRecorder = new MediaRecorder(audioStream, options);
+      const audioChunks: Blob[] = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        if (audioChunks.length > 0) {
+          const audioBlob = new Blob(audioChunks, {
+            type: options.mimeType || "audio/webm",
+          });
+          await uploadAudioToFirebase(participantId, audioBlob);
+        }
+      };
+
+      mediaRecorder.onerror = (event) => {
+        console.error("MediaRecorder error:", event);
+      };
+
+      mediaRecorder.start(1000);
+
+      setMediaRecorders((prev) => {
+        const newMap = new Map(prev);
+        newMap.set(participantId, mediaRecorder);
+        return newMap;
+      });
+    } catch (error) {
+      console.error("Error starting recording:", error);
+    }
+  };
+
+  const stopRecordingForParticipant = (participantId: string) => {
+    const recorder = mediaRecorders.get(participantId);
+    if (recorder && recorder.state === "recording") {
+      recorder.stop();
+    }
+
+    setParticipantAudioStreams((prev) => {
+      const newMap = new Map(prev);
+      newMap.delete(participantId);
+      return newMap;
+    });
+
+    setMediaRecorders((prev) => {
+      const newMap = new Map(prev);
+      newMap.delete(participantId);
+      return newMap;
+    });
+  };
+
+  const handleTrackSubscribed = (
+    track: RemoteTrack | Track,
+    publication: TrackPublication,
+    participant: Participant
+  ) => {
+    if (track.kind === Track.Kind.Audio) {
+      const mediaStreamTrack = track.mediaStreamTrack;
+      if (mediaStreamTrack) {
+        const audioStream = new MediaStream([mediaStreamTrack]);
+
+        setParticipantAudioStreams((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(participant.identity, audioStream);
+          return newMap;
+        });
+
+        startRecordingForParticipant(participant.identity, audioStream);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!room) return;
+
+    const handleParticipantConnected = (participant: Participant) => {
+      participant.trackPublications.forEach((publication: TrackPublication) => {
+        if (publication.kind === Track.Kind.Audio && publication.track) {
+          handleTrackSubscribed(publication.track, publication, participant);
+        }
+      });
+
+      participant.on(
+        "trackSubscribed",
+        (track: RemoteTrack, publication: RemoteTrackPublication) => {
+          handleTrackSubscribed(track, publication, participant);
+        }
+      );
+    };
+
+    const handleParticipantDisconnected = (participant: Participant) => {
+      stopRecordingForParticipant(participant.identity);
+    };
+
+    room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
+    room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
+    room.on(
+      RoomEvent.TrackSubscribed,
+      (
+        track: RemoteTrack,
+        publication: RemoteTrackPublication,
+        participant: Participant
+      ) => {
+        handleTrackSubscribed(track, publication, participant);
+      }
+    );
+
+    return () => {
+      room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
+      room.off(
+        RoomEvent.ParticipantDisconnected,
+        handleParticipantDisconnected
+      );
+      room.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+    };
+  }, [room, isRecording, meetingId, mediaRecorders]);
+
+  // Auto-start recording when room is connected
+  useEffect(() => {
+    if (!room) return;
+
+    const autoStartRecording = async () => {
+      if (isRecording) return;
+
+      onRecordingStatusChange("starting");
+      setIsRecording(true);
+      onRecordingStateChange(true);
+
+      // Wait for tracks to be ready
+      setTimeout(() => {
+        // Handle local participant
+        const localParticipant = room.localParticipant;
+        localParticipant?.trackPublications.forEach((publication) => {
+          if (publication.kind === Track.Kind.Audio && publication.track) {
+            handleTrackSubscribed(
+              publication.track,
+              publication,
+              localParticipant
+            );
+          }
+        });
+
+        // Handle remote participants
+        room.remoteParticipants.forEach((participant) => {
+          participant.trackPublications.forEach((publication) => {
+            if (publication.kind === Track.Kind.Audio && publication.track) {
+              handleTrackSubscribed(
+                publication.track,
+                publication,
+                participant
+              );
+            }
+          });
+        });
+
+        onRecordingStatusChange("recording");
+      }, 1000);
+    };
+
+    // Start recording when room becomes connected
+    if (room.state === "connected" && !isRecording) {
+      autoStartRecording();
+    }
+
+    // Listen for room connection events
+    const handleRoomConnected = () => {
+      if (!isRecording) {
+        autoStartRecording();
+      }
+    };
+
+    // Auto-stop recording when leaving room
+    const handleDisconnected = () => {
+      if (isRecording) {
+        onRecordingStatusChange("stopping");
+
+        mediaRecorders.forEach((_, participantId) => {
+          stopRecordingForParticipant(participantId);
+        });
+
+        setIsRecording(false);
+        onRecordingStateChange(false);
+        onRecordingStatusChange("idle");
+      }
+    };
+
+    room.on("connected", handleRoomConnected);
+    room.on("disconnected", handleDisconnected);
+
+    return () => {
+      room.off("connected", handleRoomConnected);
+      room.off("disconnected", handleDisconnected);
+    };
+  }, [
+    room,
+    isRecording,
+    onRecordingStatusChange,
+    onRecordingStateChange,
+    mediaRecorders,
+  ]);
+
+  return null;
+}
+
 export default function JoinMeeting({ params }: JoinMeetingPageProps) {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -42,6 +335,12 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
   const [error, setError] = useState("");
   const [isJoining, setIsJoining] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
+
+  // Recording state managed by RoomManager
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingStatus, setRecordingStatus] = useState<
+    "idle" | "starting" | "recording" | "stopping"
+  >("idle");
 
   useEffect(() => {
     params.then(({ id }) => {
@@ -81,12 +380,6 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
 
     setIsJoining(true);
     try {
-      console.log("Attempting to join meeting:", {
-        roomName: meeting.roomName,
-        participantName: session.user.name,
-        participantEmail: session.user.email,
-      });
-
       const response = await fetch("/api/livekit/token", {
         method: "POST",
         headers: {
@@ -101,12 +394,6 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
 
       if (response.ok) {
         const data = await response.json();
-        console.log("Token received successfully:", data.token ? "✓" : "✗");
-        console.log("Token details:", {
-          tokenLength: data.token?.length,
-          wsUrl: data.wsUrl,
-          tokenPreview: data.token?.substring(0, 50) + "...",
-        });
         setToken(data.token);
         setHasJoined(true);
       } else {
@@ -127,7 +414,6 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
   };
 
   const handleDisconnected = (reason?: DisconnectReason) => {
-    console.log("LiveKit disconnected. Reason:", reason);
     setHasJoined(false);
     setToken("");
     if (reason) {
@@ -136,12 +422,7 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
   };
 
   const handleError = (error: Error) => {
-    console.error("LiveKit error details:", {
-      message: error.message,
-      name: error.name,
-      stack: error.stack,
-      cause: error.cause,
-    });
+    console.error("Meeting error:", error.message);
     setError(`Meeting error: ${error.message}`);
     setHasJoined(false);
     setToken("");
@@ -218,11 +499,6 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
 
   if (hasJoined && token) {
     const serverUrl = process.env.NEXT_PUBLIC_LIVEKIT_WS_URL;
-    console.log("Connecting to LiveKit with:", {
-      serverUrl,
-      tokenLength: token.length,
-      tokenPreview: token.substring(0, 50) + "...",
-    });
 
     return (
       <div className="h-screen bg-black">
@@ -236,10 +512,37 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
           onDisconnected={handleDisconnected}
           onError={handleError}
           connect={true}
-          onConnected={() => {
-            console.log("Successfully connected to LiveKit room");
-          }}
         >
+          {/* Recording Status Indicator */}
+          <div className="absolute top-4 right-4 z-50 flex items-center space-x-4">
+            <div className="bg-black bg-opacity-50 rounded-lg px-4 py-2 text-white text-sm">
+              <span
+                className={`font-semibold ${
+                  recordingStatus === "recording"
+                    ? "text-red-400"
+                    : recordingStatus === "starting"
+                    ? "text-yellow-400"
+                    : recordingStatus === "stopping"
+                    ? "text-orange-400"
+                    : "text-gray-400"
+                }`}
+              >
+                {recordingStatus === "recording"
+                  ? "🔴 Recording Audio"
+                  : recordingStatus === "starting"
+                  ? "⏳ Starting Recording..."
+                  : recordingStatus === "stopping"
+                  ? "⏹️ Stopping Recording..."
+                  : "⚪ Recording Standby"}
+              </span>
+            </div>
+          </div>
+
+          <RoomManager
+            meetingId={meetingId}
+            onRecordingStatusChange={setRecordingStatus}
+            onRecordingStateChange={setIsRecording}
+          />
           <VideoConference />
           <RoomAudioRenderer />
         </LiveKitRoom>
@@ -316,12 +619,12 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
             <div className="space-y-4">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <h3 className="font-semibold text-blue-900 mb-2">
-                  🎙️ Multi-Channel Audio Recording
+                  🎙️ Automatic Audio Recording
                 </h3>
                 <p className="text-blue-800 text-sm">
-                  This meeting will record each participant's audio separately
-                  for AI analysis. Your consent to recording is required to
-                  join.
+                  Audio recording will start automatically when you join the
+                  meeting. Each participant's audio is recorded separately for
+                  AI analysis. Your consent to recording is required to join.
                 </p>
               </div>
 

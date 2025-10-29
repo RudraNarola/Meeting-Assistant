@@ -1,4 +1,3 @@
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db } from "./firebase";
 import {
   collection,
@@ -8,6 +7,9 @@ import {
   where,
   getDocs,
 } from "firebase/firestore";
+import { writeFile, mkdir } from "fs/promises";
+import { existsSync } from "fs";
+import path from "path";
 
 export interface ParticipantAudio {
   participantEmail: string;
@@ -17,6 +19,9 @@ export interface ParticipantAudio {
   uploadedAt: string;
   audioSize: number;
   duration?: number; // in seconds if available
+  storageType: "local" | "firebase";
+  localPath?: string;
+  publicUrl?: string;
 }
 
 export async function uploadParticipantAudio(
@@ -25,28 +30,46 @@ export async function uploadParticipantAudio(
   participantName: string,
   audioBlob: Blob
 ): Promise<ParticipantAudio> {
-  const storage = getStorage();
-
-  // Create structured file path
+  // Create structured file path for local storage
   const timestamp = Date.now();
-  const fileName = `recordings/${meetingId}/${participantEmail.replace(
-    "@",
-    "_at_"
-  )}-${timestamp}.webm`;
-  const storageRef = ref(storage, fileName);
+  const sanitizedEmail = participantEmail
+    .replace("@", "_at_")
+    .replace(/\./g, "_");
+  const fileName = `${sanitizedEmail}-${timestamp}.webm`;
 
-  // Upload audio file
-  await uploadBytes(storageRef, audioBlob);
-  const downloadURL = await getDownloadURL(storageRef);
+  // Create local directory structure
+  const recordingsDir = path.join(
+    process.cwd(),
+    "public",
+    "recordings",
+    meetingId
+  );
+
+  // Ensure directory exists
+  if (!existsSync(recordingsDir)) {
+    await mkdir(recordingsDir, { recursive: true });
+  }
+
+  // Local file path
+  const localFilePath = path.join(recordingsDir, fileName);
+  const publicUrl = `/recordings/${meetingId}/${fileName}`;
+
+  // Convert blob to buffer and save locally
+  const arrayBuffer = await audioBlob.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  await writeFile(localFilePath, buffer);
 
   // Create participant audio record
   const participantAudio: ParticipantAudio = {
     participantEmail,
     participantName,
-    audioUrl: downloadURL,
+    audioUrl: publicUrl, // Use public URL for access
     audioFileName: fileName,
     uploadedAt: new Date().toISOString(),
     audioSize: audioBlob.size,
+    storageType: "local",
+    localPath: localFilePath,
+    publicUrl: publicUrl,
   };
 
   // Store in Firestore for easy querying
