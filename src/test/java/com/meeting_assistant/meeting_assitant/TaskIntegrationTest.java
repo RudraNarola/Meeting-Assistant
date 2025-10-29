@@ -44,7 +44,7 @@ public class TaskIntegrationTest {
                 .title("Integration Test Task")
                 .description("Test task creation through API")
                 .status("PENDING")
-                .priority((short) 1)
+                .priority("HIGH")
                 .userId(testUser.getId())
                 .build();
 
@@ -54,7 +54,7 @@ public class TaskIntegrationTest {
         assertEquals("Integration Test Task", response.getTitle());
         assertEquals("Test task creation through API", response.getDescription());
         assertEquals("PENDING", response.getStatus());
-        assertEquals((short) 1, response.getPriority());
+        assertEquals("HIGH", response.getPriority());
         assertNotNull(response.getId());
     }
 
@@ -65,7 +65,7 @@ public class TaskIntegrationTest {
                 .title("Test Task")
                 .description("Test description")
                 .status("PENDING")
-                .priority((short) 2)
+                .priority("MEDIUM")
                 .userId(testUser.getId())
                 .build();
 
@@ -85,7 +85,7 @@ public class TaskIntegrationTest {
                 .title("Test Task")
                 .description("Test description")
                 .status("PENDING")
-                .priority((short) 1)
+                .priority("LOW")
                 .userId(99999L) // Non-existent user
                 .build();
 

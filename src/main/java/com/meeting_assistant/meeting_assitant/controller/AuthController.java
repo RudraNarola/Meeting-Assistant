@@ -49,32 +49,48 @@ public class AuthController {
     @GetMapping("/callback")
     public ResponseEntity<String> callback(@RequestParam String code, @RequestParam(required = false) String state,
             @RequestParam(required = false) Long userId) {
-        logger.info("OAuth callback received: state={}, userIdParam={}", state, userId);
+        logger.info("OAuth callback received: code={}, state={}, userIdParam={}",
+                code != null ? "present" : "null", state, userId);
         try {
+            logger.info("Exchanging authorization code for tokens...");
             var tokenResp = oauthService.exchangeCode(code);
+            logger.info("Token exchange successful");
+
             var credential = oauthService.buildCredentialFromTokenResponse(tokenResp);
+            logger.info("Credential built from token response");
 
             String access = credential.getAccessToken();
             String refresh = credential.getRefreshToken();
             Long expiresIn = credential.getExpiresInSeconds();
 
+            logger.info("OAuth tokens received - Access token: {}, Refresh token: {}, Expires in: {} seconds",
+                    access != null ? "present" : "null",
+                    refresh != null ? "present" : "null",
+                    expiresIn);
+
             Long uid = userId;
             if (uid == null && state != null) {
                 try {
                     uid = Long.parseLong(state);
+                    logger.info("Using state as userId: {}", uid);
                 } catch (Exception e) {
-                    /* ignore - state not numeric */ }
+                    logger.warn("State is not numeric: {}", state);
+                }
             }
 
             if (uid == null) {
                 // If no userId, just return tokens to caller (developer mode). In production,
                 // require user linkage.
                 logger.warn("OAuth callback completed without user linkage; returning tokens to caller");
+                logger.info("Returning tokens directly - Access: {}, Refresh: {}",
+                        access != null ? "present" : "null",
+                        refresh != null ? "present" : "null");
                 return ResponseEntity.ok("accessToken=" + access + " refreshToken=" + refresh);
             }
 
+            logger.info("Saving connection for userId: {}", uid);
             connectionService.saveOrUpdateConnection(uid, "primary", access, refresh, expiresIn);
-            logger.info("Saved Google connection for userId={}", uid);
+            logger.info("Successfully saved Google connection for userId={}", uid);
 
             // simple redirect to a success page or return ok
             URI redirect = UriComponentsBuilder.fromUriString("/").build().toUri();

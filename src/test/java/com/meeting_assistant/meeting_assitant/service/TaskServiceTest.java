@@ -61,7 +61,7 @@ class TaskServiceTest {
                 .description("Test Description")
                 .dueDate(OffsetDateTime.now().plusDays(1))
                 .status("PENDING")
-                .priority((short) 3)
+                .priority("HIGH")
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
                 .build();
@@ -71,7 +71,7 @@ class TaskServiceTest {
                 .description("Test Description")
                 .dueDate(OffsetDateTime.now().plusDays(1))
                 .status("PENDING")
-                .priority((short) 3)
+                .priority("HIGH")
                 .userId(1L)
                 .build();
     }
@@ -90,7 +90,7 @@ class TaskServiceTest {
         assertEquals("Test Task", response.getTitle());
         assertEquals("Test Description", response.getDescription());
         assertEquals("PENDING", response.getStatus());
-        assertEquals((short) 3, response.getPriority());
+        assertEquals("HIGH", response.getPriority());
         assertEquals(1L, response.getUserId());
 
         verify(userRepository).findById(1L);
@@ -194,7 +194,7 @@ class TaskServiceTest {
                 .title("Updated Task")
                 .description("Updated Description")
                 .status("IN_PROGRESS")
-                .priority((short) 4)
+                .priority("CRITICAL")
                 .userId(1L)
                 .build();
 
@@ -204,7 +204,7 @@ class TaskServiceTest {
                 .title("Updated Task")
                 .description("Updated Description")
                 .status("IN_PROGRESS")
-                .priority((short) 4)
+                .priority("CRITICAL")
                 .updatedAt(OffsetDateTime.now())
                 .build();
 
@@ -219,7 +219,7 @@ class TaskServiceTest {
         assertEquals("Updated Task", response.getTitle());
         assertEquals("Updated Description", response.getDescription());
         assertEquals("IN_PROGRESS", response.getStatus());
-        assertEquals((short) 4, response.getPriority());
+        assertEquals("CRITICAL", response.getPriority());
 
         verify(taskRepository).findById(1L);
         verify(taskRepository).save(any(Task.class));
@@ -234,7 +234,7 @@ class TaskServiceTest {
                 .title("Test Task")
                 .description("Test Description")
                 .status("COMPLETED")
-                .priority((short) 3)
+                .priority("HIGH")
                 .updatedAt(OffsetDateTime.now())
                 .build();
 

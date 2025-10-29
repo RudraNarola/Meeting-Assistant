@@ -23,7 +23,7 @@ public class TaskResponse {
 
     private String status;
 
-    private Short priority;
+    private String priority;
 
     private Long userId;
 

@@ -43,7 +43,7 @@ public class Task {
 
     private String status;
 
-    private Short priority;
+    private String priority;
 
     @Column(name = "google_event_id")
     private String googleEventId;

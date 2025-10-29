@@ -12,11 +12,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.google.api.client.util.DateTime;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.JsonFactory;
 import com.google.api.services.calendar.Calendar;
 import com.google.api.services.calendar.model.Event;
 import com.google.api.services.calendar.model.EventDateTime;
 import com.google.api.services.calendar.model.Events;
-import com.meeting_assistant.meeting_assitant.config.GoogleCalendarConfig;
 import com.meeting_assistant.meeting_assitant.exception.GoogleCalendarServiceException;
 import com.meeting_assistant.meeting_assitant.model.GoogleCalendarConnection;
 import com.meeting_assistant.meeting_assitant.model.SyncLog;
@@ -33,16 +34,25 @@ public class GoogleCalendarService {
     private static final Logger logger = LoggerFactory.getLogger(GoogleCalendarService.class);
 
     @Autowired
-    private GoogleCalendarConfig googleCalendarConfig;
+    private GoogleCalendarConnectionRepository connectionRepository;
 
     @Autowired
-    private GoogleCalendarConnectionRepository connectionRepository;
+    private GoogleCalendarConnectionService connectionService;
 
     @Autowired
     private SyncLogRepository syncLogRepository;
 
     @Autowired
     private TaskRepository taskRepository;
+
+    @Autowired
+    private GoogleOAuthService googleOAuthService;
+
+    @Autowired
+    private NetHttpTransport httpTransport;
+
+    @Autowired
+    private JsonFactory jsonFactory;
 
     /**
      * Creates a new event in Google Calendar for the given task
@@ -278,16 +288,15 @@ public class GoogleCalendarService {
      * @param priority Task priority (1-5)
      * @return Google Calendar color ID
      */
-    private String mapPriorityToColor(Short priority) {
+    private String mapPriorityToColor(String priority) {
         if (priority == null)
             return "1"; // Default blue
 
-        return switch (priority.intValue()) {
-            case 5 -> "11"; // Red (Highest priority)
-            case 4 -> "6"; // Orange (High priority)
-            case 3 -> "5"; // Yellow (Medium priority)
-            case 2 -> "2"; // Green (Low priority)
-            case 1 -> "1"; // Blue (Lowest priority)
+        return switch (priority.toUpperCase()) {
+            case "CRITICAL" -> "11"; // Red (Highest priority)
+            case "HIGH" -> "6"; // Orange (High priority)
+            case "MEDIUM" -> "5"; // Yellow (Medium priority)
+            case "LOW" -> "2"; // Green (Low priority)
             default -> "1"; // Default blue
         };
     }
@@ -295,16 +304,15 @@ public class GoogleCalendarService {
     /**
      * Gets human-readable priority name
      */
-    private String getPriorityName(Short priority) {
+    private String getPriorityName(String priority) {
         if (priority == null)
             return "Normal";
 
-        return switch (priority.intValue()) {
-            case 5 -> "Critical";
-            case 4 -> "High";
-            case 3 -> "Medium";
-            case 2 -> "Low";
-            case 1 -> "Lowest";
+        return switch (priority.toUpperCase()) {
+            case "CRITICAL" -> "Critical";
+            case "HIGH" -> "High";
+            case "MEDIUM" -> "Medium";
+            case "LOW" -> "Low";
             default -> "Normal";
         };
     }
@@ -313,17 +321,46 @@ public class GoogleCalendarService {
      * Gets authenticated Calendar service for a user
      */
     private Calendar getCalendarService(User user) {
+        logger.info("Getting Calendar service for user: {}", user.getId());
+
         Optional<GoogleCalendarConnection> connectionOpt = connectionRepository.findByUserAndIsActiveTrue(user);
 
         if (connectionOpt.isEmpty()) {
+            logger.error("No active Google Calendar connection found for user: {}", user.getId());
             throw new GoogleCalendarServiceException(
                     "No active Google Calendar connection found for user: " + user.getId());
         }
 
         GoogleCalendarConnection connection = connectionOpt.get();
-        return googleCalendarConfig.createCalendarService(
-                connection.getAccessToken(),
-                connection.getRefreshToken());
+        logger.info("Found Google Calendar connection for user: {}, active: {}", user.getId(),
+                connection.getIsActive());
+        logger.debug("Access token exists: {}, Refresh token exists: {}",
+                connection.getAccessToken() != null, connection.getRefreshToken() != null);
+
+        try {
+            // Get decrypted credentials
+            GoogleCalendarConnectionService.DecryptedCredentials credentials = connectionService
+                    .getDecryptedCredentials(connection);
+
+            logger.info("Successfully obtained decrypted credentials for user: {}", user.getId());
+
+            // Use the OAuth service to build a proper credential with refresh capability
+            com.google.api.client.auth.oauth2.Credential credential = googleOAuthService
+                    .buildCredentialFromTokens(
+                            credentials.getAccessToken(),
+                            credentials.getRefreshToken(),
+                            null);
+
+            logger.info("Successfully created OAuth credential for user: {}", user.getId());
+
+            return new Calendar.Builder(httpTransport, jsonFactory, credential)
+                    .setApplicationName("meeting-assitant")
+                    .build();
+        } catch (Exception e) {
+            logger.error("Failed to create Calendar service for user: {}, error: {}", user.getId(), e.getMessage(), e);
+            throw new GoogleCalendarServiceException(
+                    "Failed to create Calendar service for user: " + user.getId(), e);
+        }
     }
 
     /**

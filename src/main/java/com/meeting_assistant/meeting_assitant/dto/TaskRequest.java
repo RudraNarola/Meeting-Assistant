@@ -29,7 +29,7 @@ public class TaskRequest {
     @NotBlank(message = "Status is required")
     private String status;
 
-    private Short priority;
+    private String priority;
 
     @NotNull(message = "User ID is required")
     private Long userId;

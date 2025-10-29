@@ -195,7 +195,7 @@ public class TaskService {
                 .description(buildDescriptionFromActionItem(actionItem))
                 .dueDate(parseDueDate(actionItem.getDueDate()))
                 .status("PENDING")
-                .priority(parsePriority(actionItem.getPriority()))
+                .priority(actionItem.getPriority() != null ? actionItem.getPriority() : "MEDIUM")
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
                 .build();
@@ -255,6 +255,13 @@ public class TaskService {
             }
 
             logger.debug("Successfully synced task {} with Google Calendar", task.getId());
+        } catch (com.meeting_assistant.meeting_assitant.exception.GoogleCalendarServiceException e) {
+            if (e.getMessage().contains("No active Google Calendar connection")) {
+                logger.warn("Cannot sync task {} with Google Calendar - user needs to authorize first: {}",
+                        task.getId(), e.getMessage());
+            } else {
+                logger.error("Failed to sync task {} with Google Calendar: {}", task.getId(), e.getMessage(), e);
+            }
         } catch (Exception e) {
             logger.error("Failed to sync task {} with Google Calendar: {}", task.getId(), e.getMessage(), e);
         }
@@ -326,22 +333,5 @@ public class TaskService {
             logger.warn("Failed to parse due date: {}", dueDateStr);
             return null;
         }
-    }
-
-    /**
-     * Parse priority from string
-     */
-    private Short parsePriority(String priorityStr) {
-        if (priorityStr == null)
-            return 3; // Default medium priority
-
-        return switch (priorityStr.toLowerCase()) {
-            case "critical", "5" -> (short) 5;
-            case "high", "4" -> (short) 4;
-            case "medium", "3" -> (short) 3;
-            case "low", "2" -> (short) 2;
-            case "lowest", "1" -> (short) 1;
-            default -> (short) 3;
-        };
     }
 }

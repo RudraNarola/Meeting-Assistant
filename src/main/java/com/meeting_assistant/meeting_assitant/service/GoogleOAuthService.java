@@ -53,6 +53,7 @@ public class GoogleOAuthService {
         logger.info("Building Google authorization URL, state={}", state);
         GoogleAuthorizationCodeRequestUrl url = new GoogleAuthorizationCodeRequestUrl(clientId, redirectUri, scopes);
         url.setAccessType("offline");
+        url.setApprovalPrompt("force"); // Force consent to get refresh token
         if (state != null)
             url.setState(state);
         String built = url.build();
@@ -64,12 +65,14 @@ public class GoogleOAuthService {
      * Exchange authorization code for tokens using the modern Google token request.
      */
     public GoogleTokenResponse exchangeCode(String code) throws Exception {
-        logger.info("Exchanging authorization code for tokens");
+        logger.info("Exchanging authorization code for tokens, code: {}", code != null ? "present" : "null");
         GoogleAuthorizationCodeTokenRequest tokenRequest = new GoogleAuthorizationCodeTokenRequest(
                 transport, jsonFactory, clientId, clientSecret, code, redirectUri);
         GoogleTokenResponse tokenResponse = tokenRequest.execute();
-        logger.debug("Token response received: accessTokenPresent={}, expiresIn={}",
-                tokenResponse.getAccessToken() != null, tokenResponse.getExpiresInSeconds());
+        logger.info("Token exchange successful - Access token: {}, Refresh token: {}, Expires in: {} seconds",
+                tokenResponse.getAccessToken() != null ? "present" : "null",
+                tokenResponse.getRefreshToken() != null ? "present" : "null",
+                tokenResponse.getExpiresInSeconds());
         return tokenResponse;
     }
 
@@ -93,12 +96,21 @@ public class GoogleOAuthService {
      * Build a Credential object directly from access and refresh token strings.
      */
     public Credential buildCredentialFromTokens(String accessToken, String refreshToken, Long expiresInSeconds) {
+        logger.info("Building credential from tokens - Access token: {}, Refresh token: {}, Expires in: {} seconds",
+                accessToken != null ? "present" : "null",
+                refreshToken != null ? "present" : "null",
+                expiresInSeconds);
+
         TokenResponse tr = new TokenResponse();
         tr.setAccessToken(accessToken);
         tr.setRefreshToken(refreshToken);
         if (expiresInSeconds != null)
             tr.setExpiresInSeconds(expiresInSeconds);
-        return buildCredentialFromTokenResponse(tr);
+
+        Credential credential = buildCredentialFromTokenResponse(tr);
+        logger.info("Credential built successfully - Access token set: {}",
+                credential.getAccessToken() != null ? "yes" : "no");
+        return credential;
     }
 
     public List<String> getScopes() {
