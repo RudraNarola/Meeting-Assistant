@@ -14,7 +14,7 @@ def extract_items(data: MeetingSummaryIn):
     # Pass the meeting timestamp for accurate relative date parsing
     items = extract_action_items(
         summary=data.summary,
-        participants=data.participants,
+        participants=[],  # No participants needed - auto-detect from text
         meeting_time=data.timestamp_utc.isoformat() if data.timestamp_utc else None
     )
     save_tasks(data.meeting_id, items)

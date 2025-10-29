@@ -78,8 +78,10 @@ def _firstnames_index(participants: List[Participant]) -> List[Tuple[str, Partic
 
 def extract_owner(text: str, participants: List[Participant]) -> Optional[Participant]:
     """Extract owner using multiple strategies: pattern matching, NER, and name matching."""
+    
+    # If no participants provided, extract name directly from text using NER
     if not participants:
-        return None
+        return extract_owner_from_text(text)
     
     low = text.lower()
     firstnames = _firstnames_index(participants)
@@ -143,6 +145,51 @@ def extract_owner(text: str, participants: List[Participant]) -> Optional[Partic
             return p
     
     logger.info("No owner found")
+    return None
+
+
+def extract_owner_from_text(text: str) -> Optional[Participant]:
+    """
+    Extract owner name directly from text using NER and pattern matching.
+    Used when no participant list is provided.
+    """
+    # Strategy 1: Pattern matching for assignment patterns
+    assignment_patterns = [
+        r"^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:should|must|will|to)\s+",
+        r"^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+to\s+",
+        r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:should|must|will|needs to|has to)\s+",
+    ]
+    
+    for pattern in assignment_patterns:
+        match = re.search(pattern, text)
+        if match:
+            name = match.group(1).strip()
+            logger.info(f"Extracted owner from pattern: {name}")
+            return Participant(name=name)
+    
+    # Strategy 2: Use NER to find person names
+    if ner:
+        try:
+            ents = ner(text)
+            person_names = []
+            
+            for e in ents:
+                if e.get("entity_group") == "PER":
+                    name = str(e.get("word", "")).strip().replace("##", "")
+                    # Clean up and capitalize properly
+                    name = " ".join(word.capitalize() for word in name.split())
+                    if name and len(name) > 2:  # Avoid single letters
+                        person_names.append(name)
+            
+            # Return the first detected person name
+            if person_names:
+                logger.info(f"Extracted owner via NER: {person_names[0]}")
+                return Participant(name=person_names[0])
+                
+        except Exception as e:
+            logger.debug(f"NER extraction failed: {e}")
+    
+    logger.info("No owner found in text")
     return None
 
 
@@ -527,10 +574,7 @@ def extract_action_items(summary: str, participants: List[Participant], meeting_
             owner=owner,
             due=due,
             priority=priority,
-            source="huggingface",
-            confidence=0.9,
-            status="open",
-            tags=[],
+            status="open"
         )
         items.append(item)
 

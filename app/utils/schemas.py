@@ -34,14 +34,11 @@ class StatusEnum(str, Enum):
 # --------------------------------------
 class Participant(BaseModel):
     name: str
-    email: Optional[EmailStr] = None
 
 
 class MeetingSummaryIn(BaseModel):
     meeting_id: str
-    org_id: Optional[str] = None
     summary: str
-    participants: List[Participant] = []
     timestamp_utc: datetime
 
 
@@ -51,10 +48,7 @@ class ActionItem(BaseModel):
     owner: Optional[Participant] = None
     due: Optional[date] = None
     priority: PriorityEnum = PriorityEnum.normal
-    source: SourceEnum = SourceEnum.huggingface
-    confidence: confloat(ge=0, le=1) = 0.5
     status: StatusEnum = StatusEnum.open
-    tags: List[str] = []
 
 
 class ActionItemsOut(BaseModel):
