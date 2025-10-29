@@ -59,53 +59,82 @@ func (h *AudioHandler) UploadAudio(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Try to get the file from form - support both "audio" and "file" field names
-	file, header, err := r.FormFile("audio")
-	if err != nil {
-		file, header, err = r.FormFile("file")
-		if err != nil {
-			utils.RespondError(w, http.StatusBadRequest, "Audio or video file is required")
+	// Try to get files from form - support both "audio" and "file" field names
+	files := r.MultipartForm.File["audio"]
+	if len(files) == 0 {
+		files = r.MultipartForm.File["file"]
+		if len(files) == 0 {
+			utils.RespondError(w, http.StatusBadRequest, "At least one audio or video file is required")
 			return
 		}
 	}
-	defer file.Close()
 
-	filename := header.Filename
+	// Process multiple files
+	var audioFiles []interface{}
+	var videoFiles []interface{}
+	
+	for _, header := range files {
+		file, err := header.Open()
+		if err != nil {
+			utils.RespondError(w, http.StatusInternalServerError, "Failed to open file: "+header.Filename)
+			return
+		}
+		defer file.Close()
 
-	// Check if it's a video file
-	if fileutils.IsVideoFile(filename) {
-		// Handle video upload with audio extraction
-		videoFile, audioFile, err := h.service.SaveVideoFile(meetingID, filename, file)
+		filename := header.Filename
+
+		// Check if it's a video file
+		if fileutils.IsVideoFile(filename) {
+			// Handle video upload with audio extraction
+			videoFile, audioFile, err := h.service.SaveVideoFile(meetingID, filename, file)
+			if err != nil {
+				utils.RespondError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			videoFiles = append(videoFiles, videoFile)
+			audioFiles = append(audioFiles, audioFile)
+			continue
+		}
+
+		// Handle audio file upload
+		if !fileutils.IsAudioFile(filename) {
+			utils.RespondError(w, http.StatusBadRequest, "File must be an audio or video file: "+filename)
+			return
+		}
+
+		audioFile, err := h.service.SaveAudioFile(meetingID, filename, file)
 		if err != nil {
 			utils.RespondError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-
-		utils.RespondSuccess(w, "Video uploaded and audio extracted successfully", map[string]interface{}{
-			"meeting_id": meetingID,
-			"video_file": videoFile,
-			"audio_file": audioFile,
-			"message":    "Audio has been extracted from video and queued for transcription",
-		})
-		return
+		audioFiles = append(audioFiles, audioFile)
 	}
 
-	// Handle audio file upload
-	if !fileutils.IsAudioFile(filename) {
-		utils.RespondError(w, http.StatusBadRequest, "File must be an audio or video file")
-		return
-	}
-
-	audioFile, err := h.service.SaveAudioFile(meetingID, filename, file)
-	if err != nil {
-		utils.RespondError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	utils.RespondSuccess(w, "Audio uploaded successfully", map[string]interface{}{
+	// Build response
+	message := "Audio uploaded successfully"
+	response := map[string]interface{}{
 		"meeting_id": meetingID,
-		"audio_file": audioFile,
-	})
+	}
+	
+	if len(audioFiles) > 0 {
+		if len(audioFiles) == 1 {
+			response["audio_file"] = audioFiles[0]
+		} else {
+			response["audio_files"] = audioFiles
+			message = "Multiple audio files uploaded successfully"
+		}
+	}
+	
+	if len(videoFiles) > 0 {
+		if len(videoFiles) == 1 {
+			response["video_file"] = videoFiles[0]
+		} else {
+			response["video_files"] = videoFiles
+		}
+		message = "Video uploaded and audio extracted successfully"
+	}
+
+	utils.RespondSuccess(w, message, response)
 }
 
 // GetAudioFiles retrieves all audio files for a meeting

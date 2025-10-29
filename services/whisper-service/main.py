@@ -25,8 +25,13 @@ whisper_model = None
 MODEL_SIZE = os.getenv('WHISPER_MODEL', 'base')  # tiny, base, small, medium, large
 
 def load_whisper_model():
-    """Load Whisper model on startup"""
+    """Load Whisper model on first request (lazy loading)"""
     global whisper_model
+    
+    # If already loaded, return
+    if whisper_model is not None:
+        return whisper_model
+    
     logger.info(f"Loading Whisper model: {MODEL_SIZE}")
     
     # Check if CUDA is available
@@ -36,6 +41,7 @@ def load_whisper_model():
     try:
         whisper_model = whisper.load_model(MODEL_SIZE, device=device)
         logger.info(f"Whisper model '{MODEL_SIZE}' loaded successfully")
+        return whisper_model
     except Exception as e:
         logger.error(f"Failed to load Whisper model: {e}")
         raise
@@ -78,8 +84,13 @@ def transcribe_audio():
     temp_path = None
     
     try:
+        # Lazy load model on first request
         if whisper_model is None:
-            logger.error("Whisper model not loaded")
+            logger.info("Model not loaded yet, loading now...")
+            load_whisper_model()
+        
+        if whisper_model is None:
+            logger.error("Whisper model failed to load")
             return jsonify({'error': 'Whisper model not loaded'}), 503
         
         # Check if file is present
@@ -174,14 +185,11 @@ def list_models():
 
 def init_app():
     """Initialize the app (called by Gunicorn workers)"""
-    global whisper_model
-    if whisper_model is None:
-        load_whisper_model()
+    # Don't load model on startup - use lazy loading on first request
     return app
 
-# Load model when module is imported (for Gunicorn workers)
-if whisper_model is None:
-    load_whisper_model()
+# Don't load model when module is imported - use lazy loading on first request
+# This avoids startup failures when network is unavailable
 
 if __name__ == '__main__':
     # For local development only

@@ -41,6 +41,7 @@ func main() {
 		TranscriptionService: getEnv("TRANSCRIPTION_SERVICE_URL", "http://localhost:8082"),
 		DiarizationService:   getEnv("DIARIZATION_SERVICE_URL", "http://localhost:8083"),
 		SummaryService:       getEnv("SUMMARY_SERVICE_URL", "http://localhost:8085"),
+		MultichannelService:  getEnv("MULTICHANNEL_SERVICE_URL", "http://localhost:8086"),
 	}
 
 	// Initialize proxy and handlers
@@ -93,6 +94,11 @@ func main() {
 		r.Get("/meetings/{meetingID}/summary", handler.GetSummaryByMeetingID)
 		r.Delete("/summaries/{summaryID}", handler.DeleteSummary)
 		r.Delete("/meetings/{meetingID}/summary", handler.DeleteSummaryByMeetingID)
+
+		// Multichannel endpoints
+		r.Post("/multichannel/upload", handler.UploadMultichannel)
+		r.Get("/multichannel/{meetingID}/status", handler.GetMultichannelStatus)
+		r.Get("/multichannel/{meetingID}/transcript", handler.GetMultichannelTranscript)
 	})
 
 	// Start server
@@ -102,6 +108,7 @@ func main() {
 	log.Printf("Transcription Service: %s", serviceURLs.TranscriptionService)
 	log.Printf("Diarization Service: %s", serviceURLs.DiarizationService)
 	log.Printf("Summary Service: %s", serviceURLs.SummaryService)
+	log.Printf("Multichannel Service: %s", serviceURLs.MultichannelService)
 
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatalf("Server failed to start: %v", err)

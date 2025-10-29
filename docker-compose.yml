@@ -137,6 +137,7 @@ services:
       - TRANSCRIPTION_SERVICE_URL=http://transcription-service:8082
       - DIARIZATION_SERVICE_URL=http://diarization-service:8083
       - SUMMARY_SERVICE_URL=http://summary-service:8085
+      - MULTICHANNEL_SERVICE_URL=http://multichannel-service:8086
       - REDIS_URL=redis:6379
     depends_on:
       redis:

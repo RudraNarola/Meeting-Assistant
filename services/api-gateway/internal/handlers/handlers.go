@@ -307,3 +307,51 @@ func (h *GatewayHandler) DeleteSummaryByMeetingID(w http.ResponseWriter, r *http
 
 	h.copyResponse(w, resp)
 }
+
+// UploadMultichannel handles multichannel audio upload
+func (h *GatewayHandler) UploadMultichannel(w http.ResponseWriter, r *http.Request) {
+	// Forward the multipart request to multichannel service
+	resp, err := h.proxy.ProxyMultipartRequest("multichannel", "/upload", r)
+	if err != nil {
+		utils.RespondError(w, http.StatusBadGateway, fmt.Sprintf("Failed to upload multichannel audio: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	h.copyResponse(w, resp)
+}
+
+// GetMultichannelStatus retrieves the status of a multichannel meeting
+func (h *GatewayHandler) GetMultichannelStatus(w http.ResponseWriter, r *http.Request) {
+	meetingID := chi.URLParam(r, "meetingID")
+	path := fmt.Sprintf("/meetings/%s/status", meetingID)
+
+	resp, err := h.proxy.ProxyRequest("multichannel", path, http.MethodGet, nil, nil)
+	if err != nil {
+		utils.RespondError(w, http.StatusBadGateway, fmt.Sprintf("Failed to get multichannel status: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	h.copyResponse(w, resp)
+}
+
+// GetMultichannelTranscript retrieves the merged transcript from multichannel processing
+func (h *GatewayHandler) GetMultichannelTranscript(w http.ResponseWriter, r *http.Request) {
+	meetingID := chi.URLParam(r, "meetingID")
+	path := fmt.Sprintf("/meetings/%s/transcript", meetingID)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cacheKey := fmt.Sprintf("multichannel:transcript:%s", meetingID)
+	data, err := h.proxy.GetWithCache(ctx, cacheKey, "multichannel", path, 15*time.Minute)
+	
+	if err != nil {
+		utils.RespondError(w, http.StatusBadGateway, fmt.Sprintf("Failed to get multichannel transcript: %v", err))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
