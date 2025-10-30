@@ -2,6 +2,7 @@
 
 
 *.webm
+*.mp4
 
 # dependencies
 /node_modules

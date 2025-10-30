@@ -84,17 +84,19 @@ export default function Dashboard() {
     const formData = new FormData(e.currentTarget);
     const file = formData.get("recording") as File;
     const meetingTitle = formData.get("meetingTitle") as string;
+    const meetingDescription = formData.get("meetingDescription") as string;
 
     if (!file) return;
 
     setUploadingFile(true);
     try {
       const uploadData = new FormData();
-      uploadData.append("file", file);
+      uploadData.append("audio", file);
       uploadData.append("title", meetingTitle || file.name);
-      uploadData.append("uploadedAt", new Date().toISOString());
+      uploadData.append("description", meetingDescription || "");
+      uploadData.append("platform", "google-meet");
 
-      const response = await fetch("/api/recordings/upload-file", {
+      const response = await fetch("http://localhost:8080/api/v1/audio/upload", {
         method: "POST",
         body: uploadData,
       });
@@ -102,9 +104,10 @@ export default function Dashboard() {
       if (response.ok) {
         setShowUploadModal(false);
         fetchMeetings();
-        alert("Recording uploaded successfully!");
+        alert("Recording uploaded and processed successfully!");
       } else {
-        alert("Failed to upload recording");
+        const errorData = await response.json().catch(() => null);
+        alert(`Failed to upload recording: ${errorData?.message || response.statusText}`);
       }
     } catch (error) {
       console.error("Error uploading file:", error);
@@ -334,6 +337,17 @@ export default function Dashboard() {
                   className="w-full border rounded-md px-3 py-2 text-gray-900"
                   placeholder="Enter meeting name"
                   required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-900">
+                  Description (optional)
+                </label>
+                <textarea
+                  name="meetingDescription"
+                  className="w-full border rounded-md px-3 py-2 text-gray-900"
+                  placeholder="Enter meeting description"
+                  rows={2}
                 />
               </div>
               <div>

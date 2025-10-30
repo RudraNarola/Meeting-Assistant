@@ -44,6 +44,7 @@ interface JoinMeetingPageProps {
 // Room Manager Component to handle recording logic
 interface RoomManagerProps {
   meetingId: string;
+  meetingTitle?: string;
   onRecordingStatusChange: (
     status: "idle" | "starting" | "recording" | "stopping"
   ) => void;
@@ -52,6 +53,7 @@ interface RoomManagerProps {
 
 function RoomManager({
   meetingId,
+  meetingTitle,
   onRecordingStatusChange,
   onRecordingStateChange,
 }: RoomManagerProps) {
@@ -64,37 +66,159 @@ function RoomManager({
   >(new Map());
   const [isRecording, setIsRecording] = useState(false);
 
-  // Helper functions
-  const uploadAudioToFirebase = async (
-    participantId: string,
-    audioBlob: Blob
+  // Store all audio chunks from all participants
+  const [allAudioChunks, setAllAudioChunks] = useState<Map<string, Blob[]>>(
+    new Map()
+  );
+
+  console.log("🎯 RoomManager mounted/updated:", {
+    meetingId,
+    meetingTitle,
+    roomState: room?.state,
+    hasRoom: !!room,
+    isRecording,
+    participantCount: allAudioChunks.size,
+  });
+
+  // Helper function to save audio files to server's public/recordings/ directory
+  const saveAudioToServer = async (
+    audioFiles: Array<{ blob: Blob; filename: string }>
   ) => {
     try {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const filename = `meeting-${meetingId}/participant-${participantId}/audio-${timestamp}.webm`;
+      console.log(`💾 Saving ${audioFiles.length} audio files to server...`);
 
       const formData = new FormData();
-      formData.append("audio", audioBlob, filename);
-      formData.append("meetingId", meetingId);
-      formData.append("participantId", participantId);
-      formData.append("timestamp", timestamp);
 
-      const response = await fetch("/api/recordings/upload", {
+      // Add all audio files
+      audioFiles.forEach(({ blob, filename }) => {
+        formData.append("audio", blob, filename);
+      });
+
+      // Add meeting metadata
+      formData.append("meetingId", meetingId);
+
+      const response = await fetch("/api/recordings/save-local", {
         method: "POST",
         body: formData,
       });
 
       if (response.ok) {
         const result = await response.json();
+        console.log("✅ Audio files saved to server:", result);
+        return result;
       } else {
+        const errorText = await response.text().catch(() => "No error text");
         console.error(
-          "Failed to upload audio:",
+          "❌ Failed to save audio to server:",
           response.status,
-          response.statusText
+          errorText
+        );
+        return null;
+      }
+    } catch (error) {
+      console.error("❌ Error saving audio to server:", error);
+      return null;
+    }
+  };
+
+  // Helper function to upload all aggregated audio at the end of meeting
+  const uploadAllAudio = async () => {
+    if (allAudioChunks.size === 0) {
+      console.warn("⚠️ No audio chunks to upload");
+      return;
+    }
+
+    console.log(
+      `🚀 Processing aggregated audio for ${allAudioChunks.size} participants...`
+    );
+
+    try {
+      const formData = new FormData();
+      let totalSize = 0;
+      const audioFilesToSave: Array<{ blob: Blob; filename: string }> = [];
+
+      // Prepare all audio files
+      console.log("� Preparing audio files...");
+      const participants = Array.from(allAudioChunks.entries());
+
+      for (const [participantId, chunks] of participants) {
+        if (chunks.length > 0) {
+          const audioBlob = new Blob(chunks, {
+            type: "audio/webm;codecs=opus",
+          });
+
+          const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+          const filename = `${participantId}_${timestamp}.webm`;
+
+          // Add to list for server-side save
+          audioFilesToSave.push({ blob: audioBlob, filename });
+
+          // Also add to FormData for backend upload
+          formData.append("audio", audioBlob, filename);
+          totalSize += audioBlob.size;
+
+          console.log(
+            `📦 Prepared ${participantId}: ${audioBlob.size} bytes (${chunks.length} chunks)`
+          );
+        }
+      }
+
+      // First, save to server's public/recordings/ directory
+      console.log(
+        `💾 Saving ${audioFilesToSave.length} files to ./public/recordings/${meetingId}/...`
+      );
+      await saveAudioToServer(audioFilesToSave);
+
+      // Add meeting metadata
+      formData.append("title", meetingTitle || `Meeting ${meetingId}`);
+      formData.append(
+        "description",
+        `Recorded audio from meeting "${meetingTitle || meetingId}" with ${
+          allAudioChunks.size
+        } participant(s)`
+      );
+      formData.append("platform", "google-meet");
+      formData.append("meetingId", meetingId);
+      formData.append("participantCount", allAudioChunks.size.toString());
+
+      console.log(`📋 Upload summary:`, {
+        totalParticipants: allAudioChunks.size,
+        totalSize: `${(totalSize / 1024).toFixed(2)} KB`,
+        title: meetingTitle || `Meeting ${meetingId}`,
+        savedToServer: `./public/recordings/${meetingId}/`,
+        endpoint: "http://localhost:8080/api/v1/audio/upload",
+      });
+
+      console.log("📤 Uploading to backend API...");
+      const response = await fetch(
+        "http://localhost:8080/api/v1/audio/upload",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      console.log(
+        `📡 Response status: ${response.status} ${response.statusText}`
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(
+          "✅ All audio saved to server and uploaded to backend successfully:",
+          result
+        );
+      } else {
+        const errorText = await response.text().catch(() => "No error text");
+        console.error(
+          "❌ Failed to upload to backend (but files are saved on server):",
+          response.status,
+          response.statusText,
+          errorText
         );
       }
     } catch (error) {
-      console.error("Error uploading audio:", error);
+      console.error("❌ Error uploading aggregated audio:", error);
     }
   };
 
@@ -103,6 +227,8 @@ function RoomManager({
     audioStream: MediaStream
   ) => {
     try {
+      console.log(`🎙️ Starting recording for participant: ${participantId}`);
+
       const options: MediaRecorderOptions = {
         mimeType: "audio/webm;codecs=opus",
         audioBitsPerSecond: 128000,
@@ -118,22 +244,50 @@ function RoomManager({
         }
       }
 
+      console.log(`📼 Using MIME type: ${options.mimeType}`);
+
       const mediaRecorder = new MediaRecorder(audioStream, options);
-      const audioChunks: Blob[] = [];
+
+      // Initialize chunk storage for this participant
+      setAllAudioChunks((prev) => {
+        const newMap = new Map(prev);
+        newMap.set(participantId, []);
+        return newMap;
+      });
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          audioChunks.push(event.data);
+          console.log(
+            `📦 Audio chunk received: ${event.data.size} bytes for ${participantId}`
+          );
+
+          // Store chunk in the aggregated storage
+          setAllAudioChunks((prev) => {
+            const newMap = new Map(prev);
+            const existingChunks = newMap.get(participantId) || [];
+            newMap.set(participantId, [...existingChunks, event.data]);
+            return newMap;
+          });
         }
       };
 
-      mediaRecorder.onstop = async () => {
-        if (audioChunks.length > 0) {
-          const audioBlob = new Blob(audioChunks, {
-            type: options.mimeType || "audio/webm",
-          });
-          await uploadAudioToFirebase(participantId, audioBlob);
-        }
+      mediaRecorder.onstop = () => {
+        console.log(`⏹️ Recording stopped for ${participantId}`);
+
+        // Log final chunk count using the current state
+        setAllAudioChunks((prev) => {
+          const participantChunks = prev.get(participantId);
+          if (participantChunks) {
+            const totalSize = participantChunks.reduce(
+              (sum, chunk) => sum + chunk.size,
+              0
+            );
+            console.log(
+              `💾 Stored ${participantChunks.length} chunks (${totalSize} bytes) for ${participantId}`
+            );
+          }
+          return prev; // Don't modify, just log
+        });
       };
 
       mediaRecorder.onerror = (event) => {
@@ -141,6 +295,7 @@ function RoomManager({
       };
 
       mediaRecorder.start(1000);
+      console.log(`✅ MediaRecorder started for ${participantId}`);
 
       setMediaRecorders((prev) => {
         const newMap = new Map(prev);
@@ -153,9 +308,15 @@ function RoomManager({
   };
 
   const stopRecordingForParticipant = (participantId: string) => {
+    console.log(`🛑 Stopping recording for participant: ${participantId}`);
     const recorder = mediaRecorders.get(participantId);
     if (recorder && recorder.state === "recording") {
+      console.log(`⏸️ Stopping MediaRecorder for ${participantId}`);
       recorder.stop();
+    } else {
+      console.warn(
+        `⚠️ MediaRecorder not found or not recording for ${participantId}. State: ${recorder?.state}`
+      );
     }
 
     setParticipantAudioStreams((prev) => {
@@ -244,6 +405,7 @@ function RoomManager({
     const autoStartRecording = async () => {
       if (isRecording) return;
 
+      console.log(`🎬 Auto-starting recording for meeting: ${meetingId}`);
       onRecordingStatusChange("starting");
       setIsRecording(true);
       onRecordingStateChange(true);
@@ -252,8 +414,12 @@ function RoomManager({
       setTimeout(() => {
         // Handle local participant
         const localParticipant = room.localParticipant;
+        console.log(`👤 Local participant: ${localParticipant.identity}`);
         localParticipant?.trackPublications.forEach((publication) => {
           if (publication.kind === Track.Kind.Audio && publication.track) {
+            console.log(
+              `🎤 Starting recording for local participant audio track`
+            );
             handleTrackSubscribed(
               publication.track,
               publication,
@@ -263,9 +429,16 @@ function RoomManager({
         });
 
         // Handle remote participants
+        console.log(
+          `👥 Remote participants count: ${room.remoteParticipants.size}`
+        );
         room.remoteParticipants.forEach((participant) => {
+          console.log(`👤 Remote participant: ${participant.identity}`);
           participant.trackPublications.forEach((publication) => {
             if (publication.kind === Track.Kind.Audio && publication.track) {
+              console.log(
+                `🎤 Starting recording for remote participant audio track`
+              );
               handleTrackSubscribed(
                 publication.track,
                 publication,
@@ -276,6 +449,7 @@ function RoomManager({
         });
 
         onRecordingStatusChange("recording");
+        console.log(`✅ Recording started successfully`);
       }, 1000);
     };
 
@@ -292,13 +466,27 @@ function RoomManager({
     };
 
     // Auto-stop recording when leaving room
-    const handleDisconnected = () => {
+    const handleDisconnected = async () => {
+      console.log(`🚪 Room disconnected. IsRecording: ${isRecording}`);
       if (isRecording) {
         onRecordingStatusChange("stopping");
 
-        mediaRecorders.forEach((_, participantId) => {
+        console.log(`📊 Total active recorders: ${mediaRecorders.size}`);
+
+        // Stop all recorders first
+        mediaRecorders.forEach((recorder, participantId) => {
+          console.log(
+            `🛑 Stopping recorder for ${participantId}, state: ${recorder.state}`
+          );
           stopRecordingForParticipant(participantId);
         });
+
+        // Wait a bit for all recorders to finish stopping
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        // Upload all aggregated audio
+        console.log(`📤 Starting aggregated upload...`);
+        await uploadAllAudio();
 
         setIsRecording(false);
         onRecordingStateChange(false);
@@ -319,6 +507,8 @@ function RoomManager({
     onRecordingStatusChange,
     onRecordingStateChange,
     mediaRecorders,
+    allAudioChunks,
+    uploadAllAudio,
   ]);
 
   return null;
@@ -558,10 +748,12 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
       return null;
     }
 
-    console.log("Connecting to LiveKit:", {
+    console.log("🎥 Rendering LiveKit Room:", {
       serverUrl,
       hasToken: !!token,
       tokenLength: token.length,
+      meetingId,
+      meetingTitle: meeting?.title,
       currentHost: window.location.host,
       isLocalhost: window.location.hostname === "localhost",
     });
@@ -612,6 +804,7 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
 
           <RoomManager
             meetingId={meetingId}
+            meetingTitle={meeting?.title}
             onRecordingStatusChange={setRecordingStatus}
             onRecordingStateChange={setIsRecording}
           />
