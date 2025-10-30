@@ -9,27 +9,37 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    // Allow public access to meeting details for joining
     const { id: meetingId } = await params;
     const meetingRef = doc(db, "meetings", meetingId);
     const meetingDoc = await getDoc(meetingRef);
 
     if (!meetingDoc.exists()) {
-      return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
+      // Create a public meeting room for any ID
+      const host = request.headers.get("host") || "localhost:3000";
+      const protocol = request.headers.get("x-forwarded-proto") || "http";
+      const joinUrl = `${protocol}://${host}/meeting/${meetingId}/join`;
+
+      const publicMeeting = {
+        id: meetingId,
+        title: "Public Meeting Room",
+        description: "Open meeting room - anyone can join",
+        scheduledAt: new Date().toISOString(),
+        duration: 120,
+        status: "live",
+        joinUrl: joinUrl,
+        hostId: "public",
+        roomName: `room-${meetingId}`,
+        createdAt: new Date().toISOString(),
+        isPublic: true,
+      };
+      console.log("Created public meeting with joinUrl:", joinUrl);
+      return NextResponse.json({ meeting: publicMeeting });
     }
 
     const meetingData = meetingDoc.data();
 
-    // Check if user is the host of this meeting
-    if (meetingData.hostId !== session.user.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
-
+    // Remove host restriction - anyone can access meeting details
     const meeting = {
       id: meetingDoc.id,
       ...meetingData,

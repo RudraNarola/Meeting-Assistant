@@ -22,11 +22,8 @@ const db = getFirestore();
 
 export async function POST(request: NextRequest) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Allow public access for recording uploads
+    console.log("Recording upload request received");
 
     // Parse form data
     const formData = await request.formData();
@@ -87,7 +84,7 @@ export async function POST(request: NextRequest) {
       publicUrl,
       fileSize: audioFile.size,
       uploadedAt: new Date().toISOString(),
-      uploadedBy: session.user.email,
+      uploadedBy: participantId, // Use participantId since no authentication
       storageType: "local",
     };
 

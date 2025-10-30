@@ -15,31 +15,30 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white">
-      <nav className="border-b bg-white/80 backdrop-blur-sm">
+    <div className="min-h-screen bg-white">
+      {/* Simple Navigation */}
+      <nav className="border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
-            <div className="flex items-center">
-              <h1 className="text-xl font-bold text-gray-900">
-                AI Meeting Assistant
-              </h1>
-            </div>
+            <h1 className="text-xl font-semibold text-gray-900">
+              Meeting Platform
+            </h1>
 
             <div className="flex items-center space-x-4">
               {session ? (
                 <>
-                  <span className="text-sm text-gray-700">
-                    Welcome, {session.user?.name}
+                  <span className="text-sm text-gray-600">
+                    {session.user?.name}
                   </span>
                   <Link
                     href="/dashboard"
-                    className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
+                    className="bg-gray-900 text-white px-4 py-2 rounded-md text-sm hover:bg-gray-800"
                   >
                     Dashboard
                   </Link>
                   <button
                     onClick={() => signOut()}
-                    className="text-gray-700 hover:text-gray-900 text-sm font-medium"
+                    className="text-gray-600 hover:text-gray-900 text-sm"
                   >
                     Sign Out
                   </button>
@@ -47,7 +46,7 @@ export default function Home() {
               ) : (
                 <button
                   onClick={() => signIn("google")}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
+                  className="bg-gray-900 text-white px-4 py-2 rounded-md text-sm hover:bg-gray-800"
                 >
                   Sign In with Google
                 </button>
@@ -57,65 +56,59 @@ export default function Home() {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="text-center">
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">
-            AI-Powered Meeting Platform
+      {/* Hero Section */}
+      <main className="max-w-4xl mx-auto px-4 py-20">
+        <div className="text-center space-y-8">
+          <h2 className="text-5xl font-bold text-gray-900">
+            Video Meetings Made Simple
           </h2>
-          <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
-            Conduct virtual meetings with multi-channel audio recording and
-            automatic AI task extraction for seamless calendar integration.
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            Create meetings, invite participants, and record sessions locally.
+            No complications, just meetings.
           </p>
 
           {session ? (
-            <div className="space-y-4">
+            <div className="flex gap-4 justify-center">
               <Link
-                href="/create-meeting"
-                className="inline-block bg-blue-600 text-white px-8 py-3 rounded-lg text-lg font-medium hover:bg-blue-700 transition-colors"
+                href="/dashboard"
+                className="bg-gray-900 text-white px-8 py-3 rounded-md text-lg hover:bg-gray-800"
               >
-                Create Meeting
+                Go to Dashboard
               </Link>
-              <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-                <div className="bg-white p-6 rounded-lg shadow-sm border">
-                  <h3 className="text-lg font-semibold mb-2">
-                    🎥 Video Meetings
-                  </h3>
-                  <p className="text-gray-600">
-                    High-quality video calls with LiveKit technology
-                  </p>
-                </div>
-                <div className="bg-white p-6 rounded-lg shadow-sm border">
-                  <h3 className="text-lg font-semibold mb-2">
-                    🎙️ Multi-Channel Audio
-                  </h3>
-                  <p className="text-gray-600">
-                    Separate audio recording for each participant
-                  </p>
-                </div>
-                <div className="bg-white p-6 rounded-lg shadow-sm border">
-                  <h3 className="text-lg font-semibold mb-2">
-                    🤖 AI Task Extraction
-                  </h3>
-                  <p className="text-gray-600">
-                    Automatic task assignment to Google Calendar
-                  </p>
-                </div>
-              </div>
             </div>
           ) : (
-            <div className="space-y-4">
-              <p className="text-lg text-gray-700">
-                Sign in with Google to start creating meetings and enable AI
-                task creation.
-              </p>
-              <button
-                onClick={() => signIn("google")}
-                className="inline-block bg-blue-600 text-white px-8 py-3 rounded-lg text-lg font-medium hover:bg-blue-700 transition-colors"
-              >
-                Get Started
-              </button>
-            </div>
+            <button
+              onClick={() => signIn("google")}
+              className="bg-gray-900 text-white px-8 py-3 rounded-md text-lg hover:bg-gray-800"
+            >
+              Get Started
+            </button>
           )}
+        </div>
+
+        {/* Features */}
+        <div className="mt-20 grid md:grid-cols-3 gap-8">
+          <div className="text-center p-6">
+            <div className="text-3xl mb-3">🎥</div>
+            <h3 className="text-lg font-semibold mb-2">Video Meetings</h3>
+            <p className="text-gray-600 text-sm">
+              High-quality video and audio for your meetings
+            </p>
+          </div>
+          <div className="text-center p-6">
+            <div className="text-3xl mb-3">📹</div>
+            <h3 className="text-lg font-semibold mb-2">Local Recording</h3>
+            <p className="text-gray-600 text-sm">
+              Record meetings and store them locally
+            </p>
+          </div>
+          <div className="text-center p-6">
+            <div className="text-3xl mb-3">🔗</div>
+            <h3 className="text-lg font-semibold mb-2">Easy Sharing</h3>
+            <p className="text-gray-600 text-sm">
+              Share meeting links instantly with anyone
+            </p>
+          </div>
         </div>
       </main>
     </div>

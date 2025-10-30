@@ -18,12 +18,21 @@ export async function generateAccessToken(
       throw new Error("LiveKit API key or secret not configured");
     }
 
+    // Create highly unique identity to avoid conflicts
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 15);
+    const uniqueIdentity = `user-${random}-${timestamp}`;
+
     const token = new AccessToken(
       process.env.LIVEKIT_API_KEY,
       process.env.LIVEKIT_API_SECRET,
       {
-        identity: participantEmail, // Use email as unique identity
+        identity: uniqueIdentity, // Use highly unique identity
         name: participantName,
+        metadata: JSON.stringify({
+          email: participantEmail,
+          joinedAt: new Date().toISOString(),
+        }),
       }
     );
 

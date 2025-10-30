@@ -1,6 +1,5 @@
 "use client";
 
-import { useSession } from "next-auth/react";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -326,7 +325,6 @@ function RoomManager({
 }
 
 export default function JoinMeeting({ params }: JoinMeetingPageProps) {
-  const { data: session, status } = useSession();
   const router = useRouter();
   const [meetingId, setMeetingId] = useState<string>("");
   const [meeting, setMeeting] = useState<Meeting | null>(null);
@@ -349,10 +347,10 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
   }, [params]);
 
   useEffect(() => {
-    if (session && meetingId) {
+    if (meetingId) {
       fetchMeeting();
     }
-  }, [session, meetingId]);
+  }, [meetingId]);
 
   const fetchMeeting = async () => {
     try {
@@ -360,26 +358,60 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
       if (response.ok) {
         const data = await response.json();
         setMeeting(data.meeting);
-      } else if (response.status === 404) {
-        setError("Meeting not found");
-      } else if (response.status === 403) {
-        setError("You don't have access to this meeting");
       } else {
-        setError("Failed to load meeting");
+        // Temporarily allow access to any meeting - create a mock meeting
+        setMeeting({
+          id: meetingId,
+          title: "Meeting Room",
+          description: "Open meeting room",
+          scheduledAt: new Date().toISOString(),
+          duration: 60,
+          status: "live",
+          joinUrl: window.location.href,
+          hostId: "system",
+          roomName: `room-${meetingId}`,
+        });
       }
       setLoading(false);
     } catch (error) {
       console.error("Error fetching meeting:", error);
-      setError("Failed to load meeting");
+      // Fallback to mock meeting
+      setMeeting({
+        id: meetingId,
+        title: "Meeting Room",
+        description: "Open meeting room",
+        scheduledAt: new Date().toISOString(),
+        duration: 60,
+        status: "live",
+        joinUrl: window.location.href,
+        hostId: "system",
+        roomName: `room-${meetingId}`,
+      });
       setLoading(false);
     }
   };
 
   const joinMeeting = async () => {
-    if (!meeting || !session?.user?.name || !session?.user?.email) return;
+    if (!meeting) return;
 
     setIsJoining(true);
+    setError(""); // Clear any previous errors
+
     try {
+      // Generate unique participant info
+      const timestamp = Date.now();
+      const randomId = Math.random().toString(36).substring(2, 8);
+      const participantName = `User-${randomId}`;
+      const participantEmail = `user-${randomId}-${timestamp}@example.com`;
+
+      console.log("Joining meeting with:", {
+        roomName: meeting.roomName,
+        participantName,
+        participantEmail,
+        currentHost: window.location.host,
+        userAgent: navigator.userAgent.substring(0, 50),
+      });
+
       const response = await fetch("/api/livekit/token", {
         method: "POST",
         headers: {
@@ -387,23 +419,34 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
         },
         body: JSON.stringify({
           roomName: meeting.roomName,
-          participantName: session.user.name,
-          participantEmail: session.user.email,
+          participantName: participantName,
+          participantEmail: participantEmail,
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
+        console.log("Token received successfully:", { hasToken: !!data.token });
         setToken(data.token);
         setHasJoined(true);
       } else {
         const errorData = await response.json();
-        console.error("Token request failed:", response.status, errorData);
-        setError("Failed to join meeting");
+        console.error("Token request failed:", {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData,
+        });
+        setError(
+          `Failed to join meeting: ${errorData.error || "Unknown error"}`
+        );
       }
     } catch (error) {
       console.error("Error joining meeting:", error);
-      setError("Failed to join meeting");
+      setError(
+        `Failed to join meeting: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
     setIsJoining(false);
   };
@@ -414,21 +457,28 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
   };
 
   const handleDisconnected = (reason?: DisconnectReason) => {
+    console.log("LiveKit disconnected:", reason);
     setHasJoined(false);
     setToken("");
     if (reason) {
-      setError(`Connection lost: ${reason}`);
+      const reasonText =
+        typeof reason === "string" ? reason : reason.toString();
+      setError(`Connection lost: ${reasonText}`);
     }
   };
 
   const handleError = (error: Error) => {
-    console.error("Meeting error:", error.message);
+    console.error("LiveKit error:", {
+      message: error.message,
+      stack: error.stack,
+      serverUrl: process.env.NEXT_PUBLIC_LIVEKIT_WS_URL,
+    });
     setError(`Meeting error: ${error.message}`);
     setHasJoined(false);
     setToken("");
   };
 
-  if (status === "loading" || loading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-lg">Loading...</div>
@@ -436,24 +486,25 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
     );
   }
 
-  if (!session) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-4">Authentication Required</h2>
-          <p className="text-gray-600 mb-6">
-            Please sign in with Google to join this meeting.
-          </p>
-          <Link
-            href="/"
-            className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
-          >
-            Go to Homepage
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  // Temporarily removed session check
+  // if (!session) {
+  //   return (
+  //     <div className="min-h-screen flex items-center justify-center bg-gray-50">
+  //       <div className="text-center">
+  //         <h2 className="text-2xl font-bold mb-4">Authentication Required</h2>
+  //         <p className="text-gray-600 mb-6">
+  //           Please sign in with Google to join this meeting.
+  //         </p>
+  //         <Link
+  //           href="/"
+  //           className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
+  //         >
+  //           Go to Homepage
+  //         </Link>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   if (error || !meeting) {
     return (
@@ -461,8 +512,8 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
         <nav className="border-b bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between h-16 items-center">
-              <Link href="/" className="text-xl font-bold text-gray-900">
-                AI Meeting Assistant
+              <Link href="/" className="text-xl font-semibold text-gray-900">
+                Meeting Platform
               </Link>
               <div className="flex items-center space-x-4">
                 <Link
@@ -482,12 +533,11 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
               Meeting Not Available
             </h2>
             <p className="text-gray-600 mb-6">
-              {error ||
-                "The meeting you're looking for doesn't exist or you don't have access to it."}
+              {error || "The meeting you're looking for doesn't exist."}
             </p>
             <Link
               href="/dashboard"
-              className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
+              className="bg-gray-900 text-white px-6 py-2 rounded-md hover:bg-gray-800"
             >
               Back to Dashboard
             </Link>
@@ -499,6 +549,22 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
 
   if (hasJoined && token) {
     const serverUrl = process.env.NEXT_PUBLIC_LIVEKIT_WS_URL;
+
+    if (!serverUrl) {
+      console.error("NEXT_PUBLIC_LIVEKIT_WS_URL is not configured");
+      setError("LiveKit server URL not configured");
+      setHasJoined(false);
+      setToken("");
+      return null;
+    }
+
+    console.log("Connecting to LiveKit:", {
+      serverUrl,
+      hasToken: !!token,
+      tokenLength: token.length,
+      currentHost: window.location.host,
+      isLocalhost: window.location.hostname === "localhost",
+    });
 
     return (
       <div className="h-screen bg-black">
@@ -512,6 +578,12 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
           onDisconnected={handleDisconnected}
           onError={handleError}
           connect={true}
+          options={{
+            // Add connection options for better reliability
+            autoPlayAudio: true,
+            autoPlayVideo: true,
+            publishOnConnect: true,
+          }}
         >
           {/* Recording Status Indicator */}
           <div className="absolute top-4 right-4 z-50 flex items-center space-x-4">
@@ -586,24 +658,26 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
             <div className="grid grid-cols-2 gap-4 max-w-md mx-auto mb-8 text-sm">
               <div>
                 <span className="text-gray-500">Scheduled:</span>
-                <p className="font-medium">
+                <p className="font-medium text-black">
                   {new Date(meeting.scheduledAt).toLocaleDateString()}
                 </p>
               </div>
               <div>
                 <span className="text-gray-500">Time:</span>
-                <p className="font-medium">
+                <p className="font-medium text-black">
                   {new Date(meeting.scheduledAt).toLocaleTimeString()}
                 </p>
               </div>
               <div>
                 <span className="text-gray-500">Duration:</span>
-                <p className="font-medium">{meeting.duration} minutes</p>
+                <p className="font-medium text-black">
+                  {meeting.duration} minutes
+                </p>
               </div>
-              <div>
+              <div className="flex flex-col">
                 <span className="text-gray-500">Status:</span>
                 <span
-                  className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                  className={`inline-block px-2 py-1 w-1/2 mx-auto rounded-full text-xs font-medium ${
                     meeting.status === "scheduled"
                       ? "bg-green-100 text-green-800"
                       : meeting.status === "live"
@@ -617,32 +691,10 @@ export default function JoinMeeting({ params }: JoinMeetingPageProps) {
             </div>
 
             <div className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h3 className="font-semibold text-blue-900 mb-2">
-                  🎙️ Automatic Audio Recording
-                </h3>
-                <p className="text-blue-800 text-sm">
-                  Audio recording will start automatically when you join the
-                  meeting. Each participant's audio is recorded separately for
-                  AI analysis. Your consent to recording is required to join.
-                </p>
-              </div>
-
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <h3 className="font-semibold text-green-900 mb-2">
-                  🤖 AI Task Extraction
-                </h3>
-                <p className="text-green-800 text-sm">
-                  After the meeting, AI will analyze the conversation and
-                  automatically create relevant tasks in the host's Google
-                  Calendar.
-                </p>
-              </div>
-
               <button
                 onClick={joinMeeting}
                 disabled={isJoining}
-                className="bg-blue-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-gray-900 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isJoining ? "Joining..." : "Join Meeting"}
               </button>

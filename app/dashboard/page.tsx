@@ -3,6 +3,7 @@
 import { useSession, signOut } from "next-auth/react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface Meeting {
   id: string;
@@ -13,12 +14,22 @@ interface Meeting {
   status: string;
   joinUrl: string;
   hostId: string;
+  recordings?: any[];
 }
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
+  const router = useRouter();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+
+  // Form states
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [duration, setDuration] = useState(60);
 
   useEffect(() => {
     if (session) {
@@ -32,24 +43,82 @@ export default function Dashboard() {
       if (response.ok) {
         const data = await response.json();
         setMeetings(data.meetings || []);
-      } else {
-        console.error("Failed to fetch meetings");
-        setMeetings([]);
       }
       setLoading(false);
     } catch (error) {
       console.error("Error fetching meetings:", error);
-      setMeetings([]);
       setLoading(false);
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    // You could add a toast notification here
+  const createMeeting = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const response = await fetch("/api/meetings/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          description,
+          scheduledAt: new Date().toISOString(),
+          duration,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setShowCreateModal(false);
+        setTitle("");
+        setDescription("");
+        setDuration(60);
+        fetchMeetings();
+        router.push(`/meeting/${data.meeting.id}/join`);
+      }
+    } catch (error) {
+      console.error("Error creating meeting:", error);
+    }
   };
 
-  if (status === "loading") {
+  const handleFileUpload = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const file = formData.get("recording") as File;
+    const meetingTitle = formData.get("meetingTitle") as string;
+
+    if (!file) return;
+
+    setUploadingFile(true);
+    try {
+      const uploadData = new FormData();
+      uploadData.append("file", file);
+      uploadData.append("title", meetingTitle || file.name);
+      uploadData.append("uploadedAt", new Date().toISOString());
+
+      const response = await fetch("/api/recordings/upload-file", {
+        method: "POST",
+        body: uploadData,
+      });
+
+      if (response.ok) {
+        setShowUploadModal(false);
+        fetchMeetings();
+        alert("Recording uploaded successfully!");
+      } else {
+        alert("Failed to upload recording");
+      }
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      alert("Error uploading file");
+    }
+    setUploadingFile(false);
+  };
+
+  const copyLink = (url: string) => {
+    navigator.clipboard.writeText(url);
+    alert("Link copied to clipboard!");
+  };
+
+  if (status === "loading" || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-lg">Loading...</div>
@@ -59,15 +128,12 @@ export default function Dashboard() {
 
   if (!session) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold mb-4">Authentication Required</h2>
-          <p className="text-gray-600 mb-6">
-            Please sign in with Google to access your dashboard.
-          </p>
+          <h2 className="text-2xl font-semibold mb-4">Sign in required</h2>
           <Link
             href="/"
-            className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
+            className="bg-gray-900 text-white px-6 py-2 rounded-md hover:bg-gray-800"
           >
             Go to Homepage
           </Link>
@@ -79,19 +145,25 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation */}
-      <nav className="border-b bg-white">
+      <nav className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
-            <Link href="/" className="text-xl font-bold text-gray-900">
-              AI Meeting Assistant
+            <Link href="/" className="text-xl font-semibold text-gray-900">
+              Meeting Platform
             </Link>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-700">
-                Welcome, {session.user?.name}
+            <div className="flex items-center gap-4">
+              <Link
+                href="/recordings"
+                className="text-sm text-gray-600 hover:text-gray-900"
+              >
+                📹 My Recordings
+              </Link>
+              <span className="text-sm text-gray-600">
+                {session.user?.name}
               </span>
               <button
                 onClick={() => signOut()}
-                className="text-gray-700 hover:text-gray-900 text-sm font-medium"
+                className="text-sm text-gray-600 hover:text-gray-900"
               >
                 Sign Out
               </button>
@@ -101,139 +173,205 @@ export default function Dashboard() {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {/* Header */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header Actions */}
         <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600 mt-1">
-              Manage your meetings and view upcoming sessions
-            </p>
-          </div>
-          <Link
-            href="/create-meeting"
-            className="bg-blue-600 text-white px-6 py-3 rounded-md font-medium hover:bg-blue-700"
-          >
-            Create Meeting
-          </Link>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Total Meetings
-            </h3>
-            <p className="text-3xl font-bold text-blue-600">
-              {meetings.length}
-            </p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Upcoming
-            </h3>
-            <p className="text-3xl font-bold text-green-600">
-              {meetings.filter((m) => m.status === "scheduled").length}
-            </p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Completed
-            </h3>
-            <p className="text-3xl font-bold text-gray-600">
-              {meetings.filter((m) => m.status === "ended").length}
-            </p>
+          <h1 className="text-3xl font-semibold text-gray-900">My Meetings</h1>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50"
+            >
+              📁 Upload Recording
+            </button>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-gray-900 text-white px-4 py-2 rounded-md hover:bg-gray-800"
+            >
+              + Create Meeting
+            </button>
           </div>
         </div>
 
         {/* Meetings List */}
-        <div className="bg-white rounded-lg shadow-sm border">
-          <div className="px-6 py-4 border-b">
-            <h2 className="text-xl font-semibold text-gray-900">
-              Your Meetings
-            </h2>
+        {meetings.length === 0 ? (
+          <div className="bg-white rounded-lg border p-12 text-center">
+            <p className="text-gray-600 mb-4">No meetings yet</p>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-gray-900 text-white px-6 py-2 rounded-md hover:bg-gray-800"
+            >
+              Create your first meeting
+            </button>
           </div>
-
-          {loading ? (
-            <div className="p-8 text-center">
-              <div className="text-gray-600">Loading meetings...</div>
-            </div>
-          ) : meetings.length === 0 ? (
-            <div className="p-8 text-center">
-              <div className="text-gray-600 mb-4">No meetings found</div>
-              <Link
-                href="/create-meeting"
-                className="inline-block bg-blue-600 text-white px-6 py-2 rounded-md font-medium hover:bg-blue-700"
+        ) : (
+          <div className="grid gap-4">
+            {meetings.map((meeting) => (
+              <div
+                key={meeting.id}
+                className="bg-white rounded-lg border p-6 hover:shadow-md transition"
               >
-                Create Your First Meeting
-              </Link>
-            </div>
-          ) : (
-            <div className="divide-y">
-              {meetings.map((meeting) => (
-                <div key={meeting.id} className="p-6">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                        {meeting.title}
-                      </h3>
-                      {meeting.description && (
-                        <p className="text-gray-600 mb-2">
-                          {meeting.description}
-                        </p>
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                      {meeting.title}
+                    </h3>
+                    {meeting.description && (
+                      <p className="text-sm text-gray-600 mb-3">
+                        {meeting.description}
+                      </p>
+                    )}
+                    <div className="flex gap-4 text-sm text-gray-500">
+                      <span>
+                        📅 {new Date(meeting.scheduledAt).toLocaleDateString()}
+                      </span>
+                      <span>⏱️ {meeting.duration} min</span>
+                      {meeting.recordings && meeting.recordings.length > 0 && (
+                        <span>📹 {meeting.recordings.length} recordings</span>
                       )}
-                      <div className="flex items-center space-x-4 text-sm text-gray-500">
-                        <span>
-                          📅{" "}
-                          {new Date(meeting.scheduledAt).toLocaleDateString()}
-                        </span>
-                        <span>
-                          🕐{" "}
-                          {new Date(meeting.scheduledAt).toLocaleTimeString()}
-                        </span>
-                        <span>⏱️ {meeting.duration} min</span>
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs ${
-                            meeting.status === "scheduled"
-                              ? "bg-green-100 text-green-800"
-                              : meeting.status === "live"
-                              ? "bg-blue-100 text-blue-800"
-                              : "bg-gray-100 text-gray-800"
-                          }`}
-                        >
-                          {meeting.status}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex space-x-2 ml-4">
-                      {meeting.status === "scheduled" && (
-                        <Link
-                          href={`/meeting/${meeting.id}/join`}
-                          className="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
-                        >
-                          Join
-                        </Link>
-                      )}
-                      <button
-                        onClick={() => copyToClipboard(meeting.joinUrl)}
-                        className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                      >
-                        Copy Link
-                      </button>
-                      <Link
-                        href={`/meeting/${meeting.id}`}
-                        className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                      >
-                        View Details
-                      </Link>
                     </div>
                   </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => copyLink(meeting.joinUrl)}
+                      className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1 border rounded"
+                    >
+                      Copy Link
+                    </button>
+                    <Link
+                      href={`/meeting/${meeting.id}/join`}
+                      className="bg-gray-900 text-white px-4 py-1 rounded text-sm hover:bg-gray-800"
+                    >
+                      Join
+                    </Link>
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </div>
+            ))}
+          </div>
+        )}
       </main>
+
+      {/* Create Meeting Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h2 className="text-2xl font-semibold mb-4 text-gray-900">
+              Create Meeting
+            </h2>
+            <form onSubmit={createMeeting} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-900">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full border rounded-md px-3 py-2 text-gray-900"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-900">
+                  Description (optional)
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full border rounded-md px-3 py-2 text-gray-900"
+                  rows={3}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-900">
+                  Duration (minutes)
+                </label>
+                <input
+                  type="number"
+                  value={duration}
+                  onChange={(e) => setDuration(parseInt(e.target.value))}
+                  className="w-full border rounded-md px-3 py-2 text-gray-900"
+                  min="15"
+                  max="480"
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="flex-1 border border-gray-300 rounded-md py-2 hover:bg-gray-50 text-gray-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-gray-900 text-white rounded-md py-2 hover:bg-gray-800"
+                >
+                  Create & Join
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Recording Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h2 className="text-2xl font-semibold mb-4 text-gray-900">
+              Upload Recording
+            </h2>
+            <form onSubmit={handleFileUpload} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-900">
+                  Meeting Title
+                </label>
+                <input
+                  type="text"
+                  name="meetingTitle"
+                  className="w-full border rounded-md px-3 py-2 text-gray-900"
+                  placeholder="Enter meeting name"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-900">
+                  Recording File (Audio/Video)
+                </label>
+                <input
+                  type="file"
+                  name="recording"
+                  accept="audio/*,video/*"
+                  className="w-full border rounded-md px-3 py-2 text-gray-900"
+                  required
+                />
+                <p className="text-xs text-gray-600 mt-1">
+                  Supported formats: MP4, WebM, MP3, WAV, etc.
+                </p>
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowUploadModal(false)}
+                  className="flex-1 border border-gray-300 rounded-md py-2 hover:bg-gray-50 text-gray-900"
+                  disabled={uploadingFile}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-gray-900 text-white rounded-md py-2 hover:bg-gray-800 disabled:opacity-50"
+                  disabled={uploadingFile}
+                >
+                  {uploadingFile ? "Uploading..." : "Upload"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
