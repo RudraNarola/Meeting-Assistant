@@ -20,6 +20,63 @@ Dashboard + Notifications (Node.js + RabbitMQ)
 
 😎 Vibe: Feels futuristic + AI-first
 
+## Quick Start with Docker
+
+### Prerequisites
+
+- Docker & Docker Compose installed
+- Google OAuth credentials (client ID & secret)
+
+### Run the Application
+
+```bash
+# Build and start all services (MySQL + Spring Boot app)
+docker-compose up --build
+
+# Or run in detached mode
+docker-compose up -d --build
+
+# View logs
+docker-compose logs -f app
+
+# Stop services
+docker-compose down
+
+# Stop and remove volumes (clean database)
+docker-compose down -v
+```
+
+### Access the Application
+
+- **API Base URL:** http://localhost:6969
+- **Health Check:** http://localhost:6969/actuator/health
+- **OAuth Authorization:** http://localhost:6969/api/auth/google/authorize?state=1
+
+### Environment Variables
+
+The application uses the following environment variables (already configured in docker-compose.yml):
+
+- `SPRING_DATASOURCE_URL` - MySQL connection URL
+- `SPRING_DATASOURCE_USERNAME` - Database username
+- `SPRING_DATASOURCE_PASSWORD` - Database password
+- `GOOGLE_CLIENT_ID` - Google OAuth client ID
+- `GOOGLE_CLIENT_SECRET` - Google OAuth client secret
+- `GOOGLE_REDIRECT_URI` - OAuth callback URL
+- `ENCRYPTION_SECRET` - Secret for encrypting stored tokens
+
+### Local Development (without Docker)
+
+```bash
+# Ensure MySQL is running locally on port 3306
+# Update application.yaml if needed
+
+# Run with Maven
+./mvnw spring-boot:run
+
+# Or on Windows
+.\mvnw.cmd spring-boot:run
+```
+
 ## Services & Functionality Breakdown
 
 ### 1. **User & Profile Service (@Earth Magic)**

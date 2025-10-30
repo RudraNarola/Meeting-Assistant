@@ -1,0 +1,12 @@
+# Docker ignore file to reduce build context size
+target/
+!target/*.jar
+.mvn/wrapper/maven-wrapper.jar
+.git
+.gitignore
+*.md
+*.log
+.idea
+.vscode
+*.iml
+.DS_Store

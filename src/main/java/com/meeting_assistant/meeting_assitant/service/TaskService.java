@@ -2,7 +2,6 @@ package com.meeting_assistant.meeting_assitant.service;
 
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -185,17 +184,27 @@ public class TaskService {
     public TaskResponse createTaskFromActionItem(ActionItemDTO actionItem) {
         logger.info("Creating task from action item: {}", actionItem.getTitle());
 
-        // Find user by email/assignedTo (simplified for demo)
-        User user = userRepository.findByEmail(actionItem.getAssignedTo())
-                .orElseThrow(() -> new IllegalArgumentException("User not found: " + actionItem.getAssignedTo()));
+        // Find user by userId (primary) or email (fallback)
+        User user;
+        if (actionItem.getUserId() != null) {
+            user = userRepository.findById(actionItem.getUserId())
+                    .orElseThrow(
+                            () -> new IllegalArgumentException("User not found with ID: " + actionItem.getUserId()));
+        } else if (actionItem.getAssignedTo() != null) {
+            user = userRepository.findByEmail(actionItem.getAssignedTo())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "User not found with email: " + actionItem.getAssignedTo()));
+        } else {
+            throw new IllegalArgumentException("Either userId or assignedTo must be provided");
+        }
 
         Task task = Task.builder()
                 .user(user)
                 .title(actionItem.getTitle())
-                .description(buildDescriptionFromActionItem(actionItem))
+                .description(actionItem.getDescription())
                 .dueDate(parseDueDate(actionItem.getDueDate()))
                 .status("PENDING")
-                .priority(actionItem.getPriority() != null ? actionItem.getPriority() : "MEDIUM")
+                .priority("MEDIUM")
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
                 .build();
@@ -297,26 +306,6 @@ public class TaskService {
                 .lastSyncAt(task.getUpdatedAt())
                 .isActive(true)
                 .build();
-    }
-
-    /**
-     * Build description from action item
-     */
-    private String buildDescriptionFromActionItem(ActionItemDTO actionItem) {
-        StringBuilder description = new StringBuilder();
-
-        if (actionItem.getDescription() != null) {
-            description.append(actionItem.getDescription()).append("\n\n");
-        }
-
-        description.append("--- Action Item Details ---\n");
-        description.append("Source: ").append(actionItem.getSource()).append("\n");
-
-        if (actionItem.getExternalId() != null) {
-            description.append("External ID: ").append(actionItem.getExternalId()).append("\n");
-        }
-
-        return description.toString();
     }
 
     /**

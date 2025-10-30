@@ -11,17 +11,15 @@ import lombok.NoArgsConstructor;
 @Builder
 public class ActionItemDTO {
 
+    private Long userId; // User ID for task assignment
+
     private String title;
 
     private String description;
 
-    private String priority;
-
     private String dueDate;
 
-    private String assignedTo;
+    private String assignedTo; // Email or name for calendar sync
 
-    private String source; // e.g., "meeting-minutes", "action-items-service"
-
-    private String externalId; // ID from external service
+    private String externalId; // ID from external service (action-item service)
 }

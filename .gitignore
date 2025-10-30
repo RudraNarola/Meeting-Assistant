@@ -5,6 +5,7 @@
 target/
 
 application.yaml
+docker-compose.yaml
 
 *.ps1
 # Compiled class files
