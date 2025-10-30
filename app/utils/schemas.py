@@ -50,7 +50,6 @@ class ActionItem(BaseModel):
     priority: PriorityEnum = PriorityEnum.normal
     status: StatusEnum = StatusEnum.open
 
-
 class ActionItemsOut(BaseModel):
     meeting_id: str
     items: List[ActionItem]

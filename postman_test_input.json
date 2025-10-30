@@ -1,0 +1,5 @@
+{
+  "meeting_id": "M-500",
+  "transcription": "[00:00:00] Manager: Okay team, let's assign the tasks for this sprint.\n[00:00:05] Manager: Sarah, I need you to complete the API documentation by Friday.\n[00:00:10] Sarah: Got it, I'll have it done.\n[00:00:15] Manager: Alex, can you review the pull requests by tomorrow?\n[00:00:20] Alex: Sure, I'll review them today.\n[00:00:25] Manager: Mike, please update the database schema by end of week.\n[00:00:30] Mike: Understood, I'll get started on it.\n[00:00:35] Manager: And Lisa, I need you to prepare the deployment scripts immediately.\n[00:00:40] Lisa: I'll start working on them right away.\n[00:00:45] Manager: Great. Everyone, let me know if you hit any blockers.",
+  "timestamp_utc": "2025-10-30T10:00:00Z"
+}

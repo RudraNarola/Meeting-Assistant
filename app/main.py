@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from app.utils.schemas import MeetingSummaryIn, ActionItemsOut
-from app.pipeline.pipeline import extract_action_items
+from app.pipeline.production_extractor import extract_action_items_production
 from app.store.repo import save_tasks, get_tasks
+import os
 import logging
 
 # Configure logging
@@ -11,21 +12,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger("main")
 
-app = FastAPI(title="Action Item Extraction Service", version="1.0")
+app = FastAPI(title="Action Item Extraction Service (Production)", version="2.0")
 
 @app.get("/healthz")
 def health_check():
-    return {"status": "ok", "service": "action-item-extraction"}
+    return {"status": "ok", "service": "action-item-extraction", "version": "2.0-production"}
 
 @app.post("/extract", response_model=ActionItemsOut)
 def extract_items(data: MeetingSummaryIn):
     logger.info(f"Received request for meeting_id: {data.meeting_id}")
     
-    # Pass the meeting timestamp for accurate relative date parsing
-    items = extract_action_items(
-        summary=data.transcription,
-        participants=[],  # No participants needed - auto-detect from text
-        meeting_time=data.timestamp_utc.isoformat() if data.timestamp_utc else None
+    # Use production extractor with self-consistency
+    use_self_consistency = os.getenv("USE_SELF_CONSISTENCY", "true").lower() == "true"
+    
+    logger.info(f"Using production extractor (self-consistency: {use_self_consistency})")
+    items = extract_action_items_production(
+        transcription=data.transcription,
+        meeting_time=data.timestamp_utc.isoformat() if data.timestamp_utc else None,
+        use_self_consistency=use_self_consistency
     )
     
     logger.info(f"Extracted {len(items)} items, saving to MongoDB...")

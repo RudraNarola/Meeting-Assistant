@@ -9,9 +9,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_MODEL=${GEMINI_MODEL}
-      - ACTION_MIN_SCORE=${ACTION_MIN_SCORE}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL}
+      - USE_SELF_CONSISTENCY=${USE_SELF_CONSISTENCY}
       - MONGODB_URL=${MONGODB_URL}
       - MONGODB_DB_NAME=${MONGODB_DB_NAME}
     volumes:
