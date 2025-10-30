@@ -213,6 +213,8 @@ services:
     container_name: transcript-whisper-service
     ports:
       - "8084:8084"
+    volumes:
+      - whisper-models:/root/.cache/whisper
     environment:
       - PORT=8084
       - WHISPER_MODEL=tiny
@@ -279,6 +281,32 @@ services:
       - transcript-network
     restart: unless-stopped
 
+  # Multichannel Service (separate speaker audio processing)
+  multichannel-service:
+    build:
+      context: .
+      dockerfile: services/multichannel-service/Dockerfile
+    container_name: transcript-multichannel-service
+    ports:
+      - "8086:8086"
+    volumes:
+      - audio-storage:/app/storage
+    environment:
+      - PORT=8086
+      - DATABASE_URL=postgres://transcript_user:transcript_pass@postgres:5432/transcript_db?sslmode=disable
+      - WHISPER_SERVICE_URL=http://whisper-service:8084
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      whisper-service:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+    networks:
+      - transcript-network
+    restart: unless-stopped
+
 networks:
   transcript-network:
     driver: bridge
@@ -287,3 +315,4 @@ volumes:
   postgres-data:
   audio-storage:
   mongodb-data:
+  whisper-models:
